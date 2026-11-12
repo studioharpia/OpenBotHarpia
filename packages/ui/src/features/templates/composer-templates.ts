@@ -7,5 +7,5 @@ export interface PromptTemplate {
   prompt: string;
 }
 
-/** The host supplies data through this typed composition slot; shared UI owns no persistence. */
-export const ComposerTemplatesContext = createContext<Accessor<readonly PromptTemplate[]>>();
+/** Optional host data; consumers without templates keep the composer available. */
+export const ComposerTemplatesContext = createContext<Accessor<readonly PromptTemplate[]> | null>(null);
