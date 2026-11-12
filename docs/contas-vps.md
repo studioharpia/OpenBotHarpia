@@ -249,7 +249,7 @@ Convites antigos continuam vinculados ao serviço anterior e precisam de novos
 links no serviço próprio. Credenciais de integrações opcionais não são importadas
 por essa implantação; o teste de Signal não valida essas integrações.
 
-Evidência: [Publicação na Contabo](../specs/evidencias/contas-vps-contabo/Evidencia.md).
+Evidência: `specs/evidencias/contas-vps-contabo/Evidencia.md` (registro operacional local, fora do repositório público).
 Para reverter o app, preservar o banco e workspace atuais e restaurar somente o
 bundle e o conjunto compatível de configuração/sessão anterior, com o app fechado.
 Não substituir dados posteriores por uma cópia antiga do perfil. Os backups da VPS
