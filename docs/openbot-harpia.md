@@ -50,6 +50,8 @@ sem essas chaves deve utilizar o carregador de desenvolvimento e seus padrões g
 
 Os checks normais da CI permanecem habilitados. Os jobs herdados de deploy e preview do
 Cloudflare ficam limitados ao repositório upstream; um push na HARPIA não autoriza deploy.
+Os anúncios mobile no Discord, a publicação automática do runtime nativo e a política
+herdada de contribuição também ficam restritos ao upstream.
 
 O efeito visual LaserFlow é privado e continua excluído do código público. O componente da landing
 e a CI aceitam sua ausência. O script herdado `scripts/deploy-auth-api.ts` exige esse asset: o
