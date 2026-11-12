@@ -98,13 +98,13 @@ const answer = (message) => {
         timers.set(turnId, timer);
         return;
       }
-      const calls = text.includes(${JSON.stringify(CALL_MARK)}) ? [...text.matchAll(/<<ARGS([\\s\\S]*?)ARGS>>/g)] : [];
+      const calls = text.includes(${JSON.stringify(CALL_MARK)}) ? [...text.matchAll(/<<ARGS([sS]*?)ARGS>>/g)] : [];
       const match = calls.at(-1);
       if (!match) return setTimeout(() => finish(params.threadId, turnId), 20);
       const id = "tool-" + turnId;
       waiting.set(id, { threadId: params.threadId, turnId });
       // The packet carries the request as JSON text, so its quotes arrive escaped.
-      const { __tool, ...args } = JSON.parse(match[1].replace(/\\\\"/g, '"'));
+      const { __tool, ...args } = JSON.parse(match[1].replace(/\\"/g, '"'));
       return write({
         id,
         method: "item/tool/call",
@@ -228,6 +228,7 @@ try {
     }),
   );
   await waitFor("initial chat", () => agents.listQueue(agent.id).deliveries.every((d) => d.status === "completed"));
+  await runCauseEffect(agents.updateAgent({ agentId: agent.id, taskLimit: 10 }));
   const ids: string[] = [];
   for (const name of ["A", "B", "C", "D", "E", "F", "G"]) {
     const id = randomUUID();

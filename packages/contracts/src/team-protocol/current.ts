@@ -616,6 +616,8 @@ export const TEAM_BOOTSTRAP_CAPABILITIES = TEAM_CURRENT_CAPABILITIES.filter(
     capability !== BITWARDEN_CONNECTOR_CAPABILITY &&
     capability !== AGENT_TASK_LIMIT_CAPABILITY &&
     capability !== AGENT_TASK_LIMIT_V2_CAPABILITY &&
+    capability !== AGENT_TASK_TRANSFER_CAPABILITY &&
+    capability !== HOST_TASK_COMPLETIONS_CAPABILITY &&
     capability !== BROWSER_PROFILES_CAPABILITY &&
     capability !== PROVIDER_ACCOUNT_RELAY_CAPABILITY &&
     capability !== PROVIDER_ACCOUNT_RELAY_V2_CAPABILITY &&
@@ -813,6 +815,8 @@ export function legacyTeamCapabilities(capabilities: readonly string[]): string[
       capability !== BITWARDEN_CONNECTOR_CAPABILITY &&
       capability !== AGENT_TASK_LIMIT_CAPABILITY &&
       capability !== AGENT_TASK_LIMIT_V2_CAPABILITY &&
+      capability !== AGENT_TASK_TRANSFER_CAPABILITY &&
+      capability !== HOST_TASK_COMPLETIONS_CAPABILITY &&
       capability !== BROWSER_PROFILES_CAPABILITY &&
       capability !== PROVIDER_ACCOUNT_RELAY_CAPABILITY &&
       capability !== PROVIDER_ACCOUNT_RELAY_V2_CAPABILITY &&

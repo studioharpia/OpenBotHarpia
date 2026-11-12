@@ -7,7 +7,7 @@ export interface ImageMessageRow {
   messages: [AgentMessage, ...AgentMessage[]];
 }
 
-export function imageOnlyMessage(message: AgentMessage): boolean {
+function imageOnlyMessage(message: AgentMessage): boolean {
   const attachments = message.attachments;
   if (
     message.author !== "agent" ||

@@ -21,6 +21,8 @@ const config: KnipConfig = {
   },
   // Host tools that scripts and tests call. They are not npm packages.
   ignoreBinaries: [
+    // Generates temporary TLS certificates for the standalone SMTP E2E services.
+    "openssl",
     // Opens the interactive provider sign-in CLI on Linux.
     "xterm",
     // Builds the remote desktop runtime.

@@ -10,7 +10,7 @@ import {
 } from "@openbot/brand/bloub-avatar";
 import type { AvatarColor, AvatarHue } from "@openbot/contracts/ipc";
 
-export const EXTRA_AVATAR_SHAPES = [
+const EXTRA_AVATAR_SHAPES = [
   "star",
   "heart",
   "bean",
@@ -22,16 +22,7 @@ export const EXTRA_AVATAR_SHAPES = [
   "arch",
   "bolt",
 ] as const;
-export const EXTRA_AVATAR_EYES = [
-  "hearts",
-  "stars",
-  "happy",
-  "wink",
-  "sleepy",
-  "curious",
-  "focused",
-  "spirals",
-] as const;
+const EXTRA_AVATAR_EYES = ["hearts", "stars", "happy", "wink", "sleepy", "curious", "focused", "spirals"] as const;
 export type ExtraAvatarShape = (typeof EXTRA_AVATAR_SHAPES)[number];
 export type ExtraAvatarEyes = (typeof EXTRA_AVATAR_EYES)[number];
 export type AvatarShapeId = LegacyShapeId | ExtraAvatarShape;
