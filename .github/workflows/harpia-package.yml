@@ -53,6 +53,8 @@ jobs:
           bun x electron-builder --mac dir --${{ matrix.arch }} --publish never \
             --config.mac.identity=- --config.mac.notarize=false
           codesign --verify --deep --strict 'dist/${{ matrix.app_dir }}/OpenBot.app'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' \
+            'dist/${{ matrix.app_dir }}/OpenBot.app/Contents/Info.plist' | grep -Fx openbot
 
       - name: Registrar versão e arquivar preservando o bundle
         shell: bash
