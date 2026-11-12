@@ -36,6 +36,7 @@ import { SettingsProvider } from "./features/settings/settings-context";
 import { SidebarProvider } from "./features/sidebar/sidebar-context";
 import { PresenceProvider } from "./features/team/team-context";
 import { notifyTeamTyping } from "./features/team/team-typing";
+import { PromptTemplatesProvider } from "./features/templates/templates-context";
 import { UpdatesProvider } from "./features/updates/updates-context";
 import { WhatsNewProvider } from "./features/updates/whats-new-context";
 import { UsageProvider } from "./features/usage/usage-context";
@@ -108,43 +109,45 @@ export function AppProviders(props: ParentProps<AppProps>): JSX.Element {
           <SetupProvider>
             <WhatsNewProvider>
               <SettingsProvider>
-                <LayoutProvider>
-                  <UpdatesProvider>
-                    <CustomProvidersProvider>
-                      <CustomAgentsProvider>
-                        <ProviderDetectionProvider>
-                          <ServersProvider>
-                            <DynamicIslandProvider>
-                              <ServerSettingsProvider>
-                                <RemoteDesktopProvider>
-                                  <ServerSwitchProvider>
-                                    <AnsweredPromptsProvider>
-                                      <UiErrorsProvider>
-                                        <UsageProvider>
-                                          <WindowPageProvider>
-                                            <AgentReadTrackingProvider>
-                                              {/* Links and invitations open in the main window. */}
-                                              <Show when={!props.chatWindow}>
-                                                <AppBootstrap />
-                                              </Show>
-                                              <ServerScopeBoundary stableConversation={stableConversation}>
-                                                {props.children}
-                                              </ServerScopeBoundary>
-                                            </AgentReadTrackingProvider>
-                                          </WindowPageProvider>
-                                        </UsageProvider>
-                                      </UiErrorsProvider>
-                                    </AnsweredPromptsProvider>
-                                  </ServerSwitchProvider>
-                                </RemoteDesktopProvider>
-                              </ServerSettingsProvider>
-                            </DynamicIslandProvider>
-                          </ServersProvider>
-                        </ProviderDetectionProvider>
-                      </CustomAgentsProvider>
-                    </CustomProvidersProvider>
-                  </UpdatesProvider>
-                </LayoutProvider>
+                <PromptTemplatesProvider>
+                  <LayoutProvider>
+                    <UpdatesProvider>
+                      <CustomProvidersProvider>
+                        <CustomAgentsProvider>
+                          <ProviderDetectionProvider>
+                            <ServersProvider>
+                              <DynamicIslandProvider>
+                                <ServerSettingsProvider>
+                                  <RemoteDesktopProvider>
+                                    <ServerSwitchProvider>
+                                      <AnsweredPromptsProvider>
+                                        <UiErrorsProvider>
+                                          <UsageProvider>
+                                            <WindowPageProvider>
+                                              <AgentReadTrackingProvider>
+                                                {/* Links and invitations open in the main window. */}
+                                                <Show when={!props.chatWindow}>
+                                                  <AppBootstrap />
+                                                </Show>
+                                                <ServerScopeBoundary stableConversation={stableConversation}>
+                                                  {props.children}
+                                                </ServerScopeBoundary>
+                                              </AgentReadTrackingProvider>
+                                            </WindowPageProvider>
+                                          </UsageProvider>
+                                        </UiErrorsProvider>
+                                      </AnsweredPromptsProvider>
+                                    </ServerSwitchProvider>
+                                  </RemoteDesktopProvider>
+                                </ServerSettingsProvider>
+                              </DynamicIslandProvider>
+                            </ServersProvider>
+                          </ProviderDetectionProvider>
+                        </CustomAgentsProvider>
+                      </CustomProvidersProvider>
+                    </UpdatesProvider>
+                  </LayoutProvider>
+                </PromptTemplatesProvider>
               </SettingsProvider>
             </WhatsNewProvider>
           </SetupProvider>

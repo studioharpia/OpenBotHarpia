@@ -22,6 +22,8 @@ export interface HostAnalytics extends Omit<AgentAnalytics, "agentId"> {
   agentId?: string | undefined;
   agents: AnalyticsAgent[];
   providerDaily: AnalyticsProviderDay[];
+  /** Tasks first completed successfully in this range, including archived tasks. Absent on older hosts. */
+  completedTasks?: number;
   /**
    * The skills the agents loaded in the range, most tokens first. Only the local host sends it: the
    * frozen Team API host analytics wire has no skills, so a remote report has none.
@@ -72,6 +74,10 @@ function decodeAnalyticsSkills(value: unknown): AnalyticsSkill[] {
 function count(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
+function decodeCompletedTasks(value: unknown): number {
+  if (!count(value)) throw new AnalyticsInputError("Invalid completed task count.");
+  return value;
+}
 export function parseHostAnalyticsInput(value: unknown): HostAnalyticsInput {
   const range = parseAnalyticsRange(value);
   if (!isDynamicRecord(value)) throw new AnalyticsInputError("Invalid analytics request.");
@@ -87,6 +93,7 @@ export function decodeHostAnalytics(value: unknown): HostAnalytics {
     ...parseHostAnalyticsInput(value),
     agents: decodeAnalyticsAgents(value.agents),
     providerDaily: decodeAnalyticsProviderDays(value.providerDaily),
+    ...(value.completedTasks === undefined ? {} : { completedTasks: decodeCompletedTasks(value.completedTasks) }),
     ...(value.skills === undefined ? {} : { skills: decodeAnalyticsSkills(value.skills) }),
   };
 }

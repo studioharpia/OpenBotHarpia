@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "Şablon işlemleri",
+  "composer.templates.hint": "Kayıtlı istemi eklemek için sohbette / yazın.",
+  "composer.templates.new": "Yeni şablon",
+  "composer.templates.empty": "Henüz şablon yok.",
+  "composer.templates.editor": "İstem şablonu",
+  "composer.templates.name": "Ad",
+  "composer.templates.prompt": "İstem",
+  "composer.templates.storageError": "Şablonlar okunamadı veya kaydedilemedi.",
+  "composer.templates.delete": "Şablon silinsin mi?",
+  "composer.templates.noMatch": "Eşleşen şablon yok.",
+  "composer.templates.list": "İstem şablonları",
   "composer.queueEdit.body":
     "Kuyruktaki bir mesajı düzenliyorsunuz. Çalışmasına izin vermek için düzenlemeyi kaydedin veya iptal edin.",
   "composer.queueEdit.cancel": "Düzenlemeyi iptal et",
@@ -77,6 +88,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "Ajana mesaj gönder",
   "composer.placeholder.answer": "Yanıtınızı yazın",
   "composer.add.label": "İsteme ekle",
+  "composer.add.queue": "Mesajı kuyruğa al",
   "composer.add.files": "Dosya ekle",
   "composer.add.skill": "Bir beceri kullan",
   "composer.upload.cancel": "Yüklemeyi iptal et",

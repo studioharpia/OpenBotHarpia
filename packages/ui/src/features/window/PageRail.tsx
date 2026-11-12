@@ -6,6 +6,7 @@ import {
   ChartArea,
   DropdownMenu,
   Ellipsis,
+  FileText,
   GalleryVerticalEnd,
   ListChecks,
   MotionTooltip,
@@ -178,6 +179,7 @@ export type PageRailPage =
   | "schedule"
   | "usage"
   | "library"
+  | "templates"
   | "marketplace"
   | "settings";
 
@@ -189,6 +191,7 @@ export const PAGE_RAIL_PINNABLE_PAGES = [
   "schedule",
   "usage",
   "library",
+  "templates",
 ] as const satisfies readonly PageRailPage[];
 export type PageRailPinnablePage = (typeof PAGE_RAIL_PINNABLE_PAGES)[number];
 
@@ -214,6 +217,7 @@ export interface PageRailProps {
   onSchedule?: ((button: HTMLElement) => void) | undefined;
   onUsage: (button: HTMLElement) => void;
   /** Absent where the server keeps no files, such as the web client. */
+  onTemplates?: ((button: HTMLElement) => void) | undefined;
   onLibrary?: ((button: HTMLElement) => void) | undefined;
   /** Absent while Marketplace cannot open. */
   onMarketplace?: (() => void) | undefined;
@@ -385,6 +389,8 @@ export function PageRail(props: PageRailProps) {
     if (onLibrary) {
       list.push({ id: "library", label: t("app.rail.library"), icon: GalleryVerticalEnd, open: onLibrary });
     }
+    if (props.onTemplates)
+      list.push({ id: "templates", label: t("app.rail.templates"), icon: FileText, open: props.onTemplates });
     return list;
   });
   return (

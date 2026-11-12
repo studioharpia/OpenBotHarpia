@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "Sjabloonacties",
+  "composer.templates.hint": "Typ / in een chat om een opgeslagen prompt in te vullen.",
+  "composer.templates.new": "Nieuwe sjabloon",
+  "composer.templates.empty": "Nog geen sjablonen.",
+  "composer.templates.editor": "Promptsjabloon",
+  "composer.templates.name": "Naam",
+  "composer.templates.prompt": "Prompt",
+  "composer.templates.storageError": "Sjablonen konden niet worden gelezen of opgeslagen.",
+  "composer.templates.delete": "Sjabloon verwijderen?",
+  "composer.templates.noMatch": "Geen sjablonen gevonden.",
+  "composer.templates.list": "Promptsjablonen",
   "composer.queueEdit.body":
     "Je bewerkt een bericht in de wachtrij. Sla de wijziging op of annuleer hem om het bericht te laten uitvoeren.",
   "composer.queueEdit.cancel": "Bewerking annuleren",
@@ -77,6 +88,7 @@ export const messages = {
   "composer.placeholder.message": "Bericht aan {name}",
   "composer.placeholder.messageAgent": "Bericht aan agent",
   "composer.add.label": "Toevoegen aan prompt",
+  "composer.add.queue": "Bericht in wachtrij",
   "composer.add.files": "Bestanden bijvoegen",
   "composer.add.skill": "Vaardigheid gebruiken",
   "composer.upload.cancel": "Uploaden annuleren",

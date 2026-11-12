@@ -12,7 +12,7 @@ export function Sidebar(props: SidebarProps) {
   const scope = createSidebarScope(props);
   return (
     <SidebarScopeContext value={scope}>
-      <SidebarFrame compact={props.compact}>
+      <SidebarFrame compact={props.compact} compactAgentRows={props.compactAgentRows}>
         <SidebarTopbar />
 
         <SidebarSearch />

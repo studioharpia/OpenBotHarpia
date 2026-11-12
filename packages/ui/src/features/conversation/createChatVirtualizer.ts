@@ -177,7 +177,9 @@ export function createChatVirtualizer<TScrollElement extends Element, TItemEleme
           count,
           getScrollElement: options.getScrollElement,
           estimateSize: options.estimateSize,
-          getItemKey: options.getItemKey,
+          // Keys can change in the middle without changing count (for example a media run's first
+          // message was deleted). A fresh getter invalidates Tanstack's measurement-index memo.
+          getItemKey: (index) => options.getItemKey(index),
           scrollMargin,
           onChange: (instance) => {
             scheduleRefresh();

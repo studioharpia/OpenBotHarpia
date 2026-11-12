@@ -105,6 +105,12 @@ async function open(browser: Browser, client: Client, width: number): Promise<Pa
   const page = await browser.newPage({ viewport: { width, height: HEIGHT } });
   await page.goto(`${storybook}/iframe.html?id=${STORIES[client]}&viewMode=story`);
   await page.locator(".side-panel-toggle").first().waitFor({ timeout: 120_000 });
+  // Both clients start at Central. Exercise the empty launcher below after closing that tab.
+  await page.getByRole("tab", { name: "Agent central", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Close Agent central", exact: true }).click();
+  await page.locator(".side-panel-launcher").waitFor();
+  await page.locator(".side-panel-toggle").first().click();
+  await page.locator(".side-panel-header").waitFor({ state: "detached" });
   return page;
 }
 

@@ -2,6 +2,14 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "Geef de taak-ID en de ID van de doelagent op.",
+  "error.backend.taskTransferFailed": "OpenBot kon de taak niet overdragen. Probeer het opnieuw.",
+  "error.backend.taskTransferOwnChatOnly":
+    "Draag taken over vanuit je eigen chat, niet vanuit een kanaal, extern gesprek of andere taak.",
+  "error.backend.threadTransferBusy": "Deze taak heeft lopend of wachtend werk en kan nog niet worden verplaatst.",
+  "error.backend.threadTransferRoutine":
+    "Taken die aan routines zijn gekoppeld, kunnen niet naar een andere agent worden verplaatst.",
+
   "error.backend.eventsUnavailable": "Events zijn niet beschikbaar op deze host.",
   "error.backend.databaseIntegrity": "De database van OpenBot heeft de integriteitscontrole niet doorstaan.",
   "error.backend.webhookRouteLimit": "Een host kan maximaal {limit} webhookroutines hebben.",
@@ -398,6 +406,8 @@ export const messages = {
   "error.backend.taskTitleRequired": "Geef de taak een korte titel.",
   "error.backend.taskToolInvalid":
     "Geef de taak een titel van maximaal 120 tekens en een korte opdracht die zegt wat er moet gebeuren.",
+  "error.backend.taskRenameInvalid": "Geef de taak-ID en een titel van maximaal 120 tekens op.",
+  "error.backend.taskRenameFailed": "OpenBot kon de taak niet hernoemen. Probeer het opnieuw.",
   "error.backend.taskOwnChatOnly":
     "Start een taak alleen vanuit je eigen chat. Een kanaal, een berichtengesprek of een andere taak kan er geen starten.",
   "error.backend.taskUnfinishedLimit":

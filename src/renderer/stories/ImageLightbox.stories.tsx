@@ -7,7 +7,7 @@ import { fn } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { STORY_AGENTS } from "./fixtures";
 
-/* Gradients of different sizes, so the justified rows have aspect ratios to balance. */
+/* Different sizes exercise compact thumbnails without cropping their natural proportions. */
 function sampleImage(id: string, width: number, height: number, hue: number): AttachmentSummary {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl(${hue} 70% 58%)'/><stop offset='1' stop-color='hsl(${hue + 50} 65% 32%)'/></linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/></svg>`;
   return {
@@ -80,4 +80,16 @@ export const Viewer: Story = {
   render: (storyArgs) => (
     <ImageLightbox opening={{ images: storyArgs.images, index: 1 }} onDownload={fn()} onClose={fn()} />
   ),
+};
+
+export const SingleAttachment: Story = { args: { images: IMAGES.slice(1, 2) } };
+
+export const ExtremeProportions: Story = {
+  args: {
+    images: [
+      sampleImage("wide-panorama", 2400, 240, 210),
+      sampleImage("tall-screenshot", 300, 1800, 280),
+      sampleImage("landscape", 960, 540, 20),
+    ],
+  },
 };

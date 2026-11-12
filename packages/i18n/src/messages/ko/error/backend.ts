@@ -2,6 +2,13 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "작업 ID와 대상 에이전트 ID를 입력하세요.",
+  "error.backend.taskTransferFailed": "OpenBot이 작업을 이전하지 못했습니다. 다시 시도하세요.",
+  "error.backend.taskTransferOwnChatOnly":
+    "채널, 외부 대화 또는 다른 작업이 아닌 자신의 기본 채팅에서 작업을 이전하세요.",
+  "error.backend.threadTransferBusy": "실행 중이거나 대기 중인 작업이 있어 아직 이동할 수 없습니다.",
+  "error.backend.threadTransferRoutine": "루틴에 연결된 작업은 다른 에이전트로 이동할 수 없습니다.",
+
   "error.backend.eventsUnavailable": "이 호스트에서는 이벤트를 사용할 수 없어요.",
   "error.backend.databaseIntegrity": "OpenBot 데이터베이스가 무결성 검사에 실패했어요.",
   "error.backend.webhookRouteLimit": "호스트 하나에는 웹훅 루틴을 최대 {limit}개까지 둘 수 있어요.",
@@ -365,6 +372,8 @@ export const messages = {
   "error.backend.threadMoveRefused": "이 에이전트에게만 보낸 메시지만 새 스레드에서 실행할 수 있어요.",
   "error.backend.taskTitleRequired": "작업에 짧은 제목을 지정하세요.",
   "error.backend.taskToolInvalid": "작업에 120자 이하의 제목과 할 일을 설명하는 지시문을 지정하세요.",
+  "error.backend.taskRenameInvalid": "작업 ID와 최대 120자의 제목을 입력하세요.",
+  "error.backend.taskRenameFailed": "OpenBot이 작업 이름을 변경하지 못했습니다. 다시 시도하세요.",
   "error.backend.taskOwnChatOnly":
     "작업은 자신의 채팅에서만 시작할 수 있어요. 채널, 메시징 대화, 다른 작업에서는 시작할 수 없어요.",
   "error.backend.taskUnfinishedLimit":

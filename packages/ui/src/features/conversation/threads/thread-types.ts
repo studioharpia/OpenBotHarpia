@@ -1,4 +1,6 @@
+import type { AgentTaskOutcome } from "@openbot/contracts/ipc";
 import type { SidebarWaitReason } from "@openbot/ui/features/sidebar/sidebar-types";
+import type { TaskTransferSource } from "./task-transfer-drag";
 
 /** What the agent does in a thread, as a sidebar row shows it for the agent. */
 export type ThreadStatus =
@@ -19,6 +21,8 @@ export interface ThreadItem {
   title: string;
   updatedAt: string;
   status: ThreadStatus;
+  /** Last execution result, retained when its failure notification has been read. */
+  outcome?: AgentTaskOutcome | null | undefined;
   /** The agent messages in the thread that the user has not read. Absent when the host keeps no read mark. */
   unread?: number | undefined;
   /**
@@ -38,6 +42,8 @@ export interface ThreadStem {
 }
 
 /** The thread row as tabs, as one button with the open thread, or as a chevron only. */
+export type ThreadPlacement = "sidebar" | "topbar";
+
 export type ThreadRowMode = "tabs" | "compact" | "minimal";
 
 /** A turn runs in the thread. The user stops it before an archive or a delete. */
@@ -50,6 +56,7 @@ export function threadBusy(status: ThreadStatus): boolean {
  * when the host cannot rename or delete threads; the actions then do not show.
  */
 export interface ThreadHeaderProps {
+  taskTransfer?: TaskTransferSource | undefined;
   /** Every side thread that is not archived. The agent's name in the header opens the agent's own chat. */
   threads: readonly ThreadItem[];
   /** The side threads that have a tab, and the new thread, in tab order. */

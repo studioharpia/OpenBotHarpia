@@ -46,6 +46,27 @@ export function measureSidebarDragSlots(
   const chats = new Map<string, ChatDragSlot>();
   const people = new Map<string, PersonDragSlot>();
   const pinned: DragSlot[] = [];
+  // Remeasurement can happen during the reorder preview (for example when the empty pinned
+  // target opens). Use layout positions, excluding the current animated translations, or the
+  // drop resolves against the neighbours we just moved out of the pointer's way.
+  const translations = new Map<HTMLElement, { x: number; y: number }>();
+  const layoutBounds = (element: HTMLElement): DOMRect => {
+    const bounds = element.getBoundingClientRect();
+    let x = 0;
+    let y = 0;
+    for (let current: HTMLElement | null = element; current && current !== list; current = current.parentElement) {
+      let translation = translations.get(current);
+      if (!translation) {
+        const transform = getComputedStyle(current).transform;
+        const matrix = transform === "none" ? null : new DOMMatrixReadOnly(transform);
+        translation = { x: matrix?.m41 ?? 0, y: matrix?.m42 ?? 0 };
+        translations.set(current, translation);
+      }
+      x += translation.x;
+      y += translation.y;
+    }
+    return new DOMRect(bounds.x - x, bounds.y - y, bounds.width, bounds.height);
+  };
   const pinnedGroup = list.querySelector<HTMLElement>(SIDEBAR_DRAG_SELECTORS.pinnedGroup);
   const pinnedTarget = pinnedGroup?.querySelector<HTMLElement>(SIDEBAR_DRAG_SELECTORS.pinnedEmptyDrop) ?? pinnedGroup;
   const listBounds = list.getBoundingClientRect();
@@ -56,7 +77,7 @@ export function measureSidebarDragSlots(
   for (const section of list.querySelectorAll<HTMLElement>(SIDEBAR_DRAG_SELECTORS.sectionRegion)) {
     const sectionId = section.dataset.sectionId;
     if (!sectionId || isInClosedSection(section)) continue;
-    const bounds = section.getBoundingClientRect();
+    const bounds = layoutBounds(section);
     const header = section.querySelector<HTMLElement>(":scope > header");
     // A stuck header is not at the top of its section, so its line comes from its style, not its box.
     const headerStyle = header ? getComputedStyle(header) : null;
@@ -77,7 +98,7 @@ export function measureSidebarDragSlots(
   for (const row of list.querySelectorAll<HTMLElement>(SIDEBAR_DRAG_SELECTORS.chatRow)) {
     const chatId = row.dataset.chatId;
     if (!chatId || isInClosedSection(row)) continue;
-    const bounds = row.getBoundingClientRect();
+    const bounds = layoutBounds(row);
     chats.set(chatId, {
       bottom: bounds.bottom,
       centerY: bounds.top + bounds.height / 2,
@@ -91,7 +112,7 @@ export function measureSidebarDragSlots(
   for (const row of list.querySelectorAll<HTMLElement>(SIDEBAR_DRAG_SELECTORS.personRow)) {
     const memberId = row.dataset.personId;
     if (!memberId) continue;
-    const bounds = row.getBoundingClientRect();
+    const bounds = layoutBounds(row);
     people.set(memberId, {
       bottom: bounds.bottom,
       centerY: bounds.top + bounds.height / 2,
@@ -103,7 +124,7 @@ export function measureSidebarDragSlots(
   for (const item of list.querySelectorAll<HTMLElement>(SIDEBAR_DRAG_SELECTORS.pinnedTile)) {
     const key = item.dataset.pinnedKey;
     if (!key) continue;
-    const bounds = item.getBoundingClientRect();
+    const bounds = layoutBounds(item);
     pinned.push({
       bottom: bounds.bottom,
       centerX: bounds.left + bounds.width / 2,

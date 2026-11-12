@@ -1,4 +1,4 @@
-/* The Tasks page in TasksPage.tsx: one calm column, and the task panel beside it. */
+/* The Tasks Kanban uses the existing OpenBot surfaces, task marks and conversation panel. */
 .tasks-page {
   display: flex;
   height: 100%;
@@ -7,7 +7,7 @@
   color: var(--openbot-text-primary);
 }
 
-/* One centered column. */
+/* The board uses the page width; the familiar composer keeps its existing width. */
 .tasks-page-scroll {
   min-width: 0;
   flex: 1;
@@ -17,7 +17,7 @@
 
 .tasks-page-column {
   display: flex;
-  max-width: 36rem;
+  min-height: 100%;
   flex-direction: column;
   gap: var(--openbot-space-1);
   margin: 0 auto;
@@ -66,6 +66,9 @@
   position: sticky;
   z-index: 3;
   top: 0;
+  width: 100%;
+  max-width: 36rem;
+  align-self: center;
   margin-bottom: var(--openbot-space-2);
   background: var(--openbot-bg-canvas);
   padding: var(--openbot-space-1) 0 0;
@@ -306,69 +309,129 @@
 }
 
 /* The tasks by what they need, each section with its heading. */
-.tasks-page-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--openbot-space-0-5);
+.tasks-page-board {
+  display: grid;
+  min-width: 0;
+  min-height: 24rem;
+  flex: 1;
+  grid-template-columns: repeat(4, minmax(16rem, 1fr));
+  gap: var(--openbot-space-4);
+  overflow-x: auto;
+  padding-bottom: var(--openbot-space-2);
 }
 
-.tasks-page-section + .tasks-page-section {
-  margin-top: var(--openbot-space-4);
+.tasks-page-section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--openbot-space-3);
+  border: 1px solid var(--openbot-border-chrome-glass);
+  border-radius: var(--openbot-radius-lg);
+  background: var(--openbot-bg-surface);
+  padding: var(--openbot-space-3);
 }
 
 .tasks-page-section-heading {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--openbot-space-1-5);
   margin: 0;
-  padding: var(--openbot-space-1) var(--openbot-space-2);
-  color: var(--openbot-text-muted);
-  font-size: var(--openbot-text-sm);
+  padding: var(--openbot-space-1) var(--openbot-space-1);
+  color: var(--openbot-text-secondary);
+  font-size: var(--openbot-text-md);
   font-weight: var(--openbot-weight-medium);
 }
 
 .tasks-page-count {
+  min-width: var(--openbot-space-5);
+  border-radius: var(--openbot-radius-sm);
+  background: var(--openbot-bg-canvas);
+  padding-inline: var(--openbot-space-1);
   color: var(--openbot-text-muted);
   font-size: var(--openbot-text-sm);
   font-weight: var(--openbot-weight-regular);
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
 .tasks-page-list {
   display: flex;
   flex-direction: column;
-  gap: var(--openbot-space-0-5);
+  gap: var(--openbot-space-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .tasks-page-row.ui-button {
-  display: grid;
+  display: flex;
   width: 100%;
-  height: var(--openbot-control-lg);
-  align-items: center;
-  justify-content: stretch;
-  grid-template-columns: 16px minmax(0, 1fr) auto auto;
-  gap: var(--openbot-space-3);
+  height: auto;
+  min-height: var(--openbot-control-lg);
+  align-items: stretch;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: var(--openbot-space-4);
+  border: 1px solid var(--openbot-border-chrome-glass);
   border-radius: var(--openbot-radius-md);
-  padding: 0 var(--openbot-space-2);
+  background-color: var(--openbot-bg-canvas);
+  padding: var(--openbot-space-3);
   font-size: var(--openbot-text-md);
   font-weight: var(--openbot-weight-regular);
   text-align: start;
+  white-space: normal;
   --task-list-glyph: 14px;
 }
 
-.tasks-page-row[data-selected] {
-  background: var(--openbot-bg-control-active);
+.tasks-page-row.ui-button:hover {
+  background-color: var(--openbot-bg-control-hover);
+}
+
+.tasks-page-row.ui-button[data-selected] {
+  background-color: var(--openbot-bg-control-active);
 }
 
 .tasks-page-section[data-closed] .tasks-page-row:not([data-selected]) {
   opacity: 0.55;
 }
 
+.tasks-page-card-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: var(--openbot-space-2);
+}
+
 .tasks-page-row-title {
   min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  color: var(--openbot-text-primary);
+  font-size: var(--openbot-text-lg);
+  line-height: var(--openbot-leading-lg);
+}
+
+.tasks-page-card-footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--openbot-space-2);
+}
+
+.tasks-page-card-agent {
+  display: flex;
+  min-width: 0;
+  max-width: 45%;
+  flex: none;
+  align-items: center;
+  gap: var(--openbot-space-1-5);
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-sm);
+}
+
+.tasks-page-card-agent-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

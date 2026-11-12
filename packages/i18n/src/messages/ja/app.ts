@@ -56,6 +56,7 @@ export const messages = {
   "app.rail.tasks": "タスク",
   "app.rail.workflows": "ワークフロー",
   "app.rail.usage": "使用量",
+  "app.rail.templates": "テンプレート",
   "app.rail.library": "ライブラリ",
   "app.rail.marketplace": "マーケットプレイス",
   "app.rail.settings": "設定",

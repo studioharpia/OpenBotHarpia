@@ -13,9 +13,12 @@ self-hosted account service with its own keys. See
 
 - Accounts on your service are separate from accounts on `openbot.run`. Each person signs in again.
 - Each desktop and phone that connects to a host must use the same service.
-- Invitations are `openbot://join` links. Copy a link from the app and send it yourself. The app
-  does not send an invitation by email.
-- The browser client at `openbot.run/app` does not work with your service.
+- With the standalone VPS account service, invitations use HTTPS `/join` links on its configured
+  public origin and can be sent through its SMTP account. Old `openbot://join` links remain valid.
+  Update both the client and the VPS service before using email invitations. The Worker setup
+  below has no configured self-hosted invitation origin; use copied links there.
+- Use the browser client at your VPS service’s `/app`. The browser client at `openbot.run/app`
+  does not work with your service.
 - Hosted servers, the OpenBot GitHub App, Slack, the OpenBot Telegram bot and the iPhone Live
   Activity relay stay off. Each needs secrets that only we have.
 - The other network connections in [PRIVACY.md](../PRIVACY.md) do not change.
@@ -171,3 +174,10 @@ a user name or password, or is set without `OPENBOT_AUTH_API_URL`.
 After each OpenBot update, pull the same release, keep your `wrangler.jsonc` changes and deploy the
 Worker again. The deploy applies the new D1 migrations. Then rebuild Signal with the same
 `docker compose` command.
+
+## Alternativa inteiramente em VPS própria
+
+O serviço de contas também possui um alvo independente de Cloudflare, com SQLite
+e armazenamento de objetos persistente. Consulte [Serviço de contas em VPS própria](contas-vps.md)
+para configuração, verificações e migração de identidade. Essa alternativa exige
+publicar API, Signal e TURN próprios antes de trocar a origem no aplicativo.

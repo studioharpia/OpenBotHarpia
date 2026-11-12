@@ -4,6 +4,7 @@ import { Bot, File, Folder, Plug, type Puzzle, ShieldCheck, Store, UsersRound } 
 import type { ComposerAgent, ComposerBrowserTab, ComposerMcpServer, ComposerSkill, ComposerThread } from "../../data";
 import type { TextValue } from "../../text";
 import { browserDisplayUrl } from "../browser/browser-suggestions";
+import type { PromptTemplate } from "../templates/composer-templates";
 
 /**
  * Where the picker hangs, and from which element. Like the queue panel, it is a child of
@@ -17,6 +18,7 @@ export interface PickerFrame {
 }
 
 export type PickerOption =
+  | { type: "template"; template: PromptTemplate }
   | { type: "agent"; agent: ComposerAgent }
   /** Addresses every member of a channel. It inserts the text `@everyone`. */
   | { type: "everyone" }
@@ -40,6 +42,7 @@ export interface PickerSection {
 }
 
 export function pickerOptionKey(option: PickerOption): string {
+  if (option.type === "template") return `template:${option.template.id}`;
   if (option.type === "agent") return `agent:${option.agent.id}`;
   if (option.type === "everyone") return "everyone";
   if (option.type === "skill") return `skill:${option.skill.skillId}`;
@@ -49,6 +52,7 @@ export function pickerOptionKey(option: PickerOption): string {
 }
 
 export function pickerOptionText(option: PickerOption, t: TextValue["t"]): string {
+  if (option.type === "template") return option.template.name;
   if (option.type === "agent") return t("composer.picker.option.agent", { name: option.agent.name });
   if (option.type === "everyone") return t("composer.picker.everyone");
   if (option.type === "skill") {
@@ -63,6 +67,7 @@ export function pickerOptionText(option: PickerOption, t: TextValue["t"]): strin
 }
 
 export function pickerOptionName(option: PickerOption, t: TextValue["t"]): string {
+  if (option.type === "template") return option.template.name;
   if (option.type === "agent") return option.agent.name;
   if (option.type === "everyone") return t("composer.picker.everyone");
   if (option.type === "skill") return option.skill.name;
@@ -76,6 +81,7 @@ export function pickerOptionDescription(
   t: TextValue["t"],
   format: TextValue["format"],
 ): string | undefined {
+  if (option.type === "template") return option.template.prompt;
   if (option.type === "everyone") return t("composer.picker.everyoneDescription");
   if (option.type === "attachment") return format.fileSize(option.attachment.size);
   if (option.type === "skill") return skillDescription(option.skill);
@@ -144,6 +150,7 @@ export function pickerOptionBadge(
   option: PickerOption,
   t: TextValue["t"],
 ): { label: string; icon?: typeof Puzzle } | null {
+  if (option.type === "template") return null;
   // The section title says that a row is a tab, so a tab row needs no badge.
   if (option.type === "tab") return null;
   if (option.type === "thread") return { label: t(THREAD_STATE_LABELS[threadStateLabel(option.thread)]) };

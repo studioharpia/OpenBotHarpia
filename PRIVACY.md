@@ -8,6 +8,13 @@ service stores the minimum central data needed for email sign-in, account avatar
 configuration, memberships, invitations, logical sessions, and the account's product analytics
 answer.
 
+Na alternativa de [serviço de contas em VPS própria](docs/contas-vps.md), esses
+registros e os objetos publicados ficam nos bancos SQLite da VPS administrada pelo
+operador, em vez de D1/R2. O e-mail passa pelo SMTP configurado pelo operador; o
+Signal e o TURN também precisam de endereços próprios. As conversas, os anexos e as
+chaves privadas dos hosts continuam nos computadores que executam o OpenBot. Essa
+opção só passa a ser usada após a migração explícita da conta e dos endpoints.
+
 The optional browser client at `/app` connects to the computer that runs OpenBot. Conversation
 and attachment data travel through the existing encrypted host connection, not through the
 account Worker. The browser keeps chat pages, drafts, search results, and file previews in memory;

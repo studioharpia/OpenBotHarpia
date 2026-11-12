@@ -40,6 +40,7 @@ const COMPANY_COOKIE = "__Host-openbot-company";
 const COMPANY_FLOW_SECONDS = 600;
 
 export interface BrowserApiServices {
+  inviteLinks?: import("@openbot/contracts/invite-links").InviteLinkOptions;
   auth: Pick<
     AuthService,
     | "startEmailSignIn"
@@ -368,7 +369,12 @@ const handleBrowserOperation = Effect.fn("BrowserApi.handleOperation")(function*
     return json(yield* services.remote.acceptInvite(user, yield* requiredString(body, "token")));
   if (path === "v1/team-invitations/email") {
     yield* sendTeamInviteEmail(
-      { auth: services.auth, remote: services.remote, delivery: services.inviteEmailDelivery },
+      {
+        auth: services.auth,
+        remote: services.remote,
+        delivery: services.inviteEmailDelivery,
+        inviteLinks: services.inviteLinks,
+      },
       user,
       body,
       services.sourceIp(request),

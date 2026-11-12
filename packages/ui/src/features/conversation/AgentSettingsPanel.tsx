@@ -1,4 +1,3 @@
-import type { ExpressionId } from "@norbert_bodziony/bloub";
 import { agentProviderDescriptor, agentProviderName, foreignProvider } from "@openbot/contracts/agent-providers";
 import { INPUT_LIMITS } from "@openbot/contracts/input-limits";
 import {
@@ -75,6 +74,7 @@ import {
   avatarSeedForFace,
   avatarStyleForSeed,
   bloubAvatarProfile,
+  type AvatarExpressionId as ExpressionId,
   isAvatarColorChoice,
   SUPPORTED_AVATAR_SILHOUETTES,
   type SupportedAvatarSilhouetteId,
@@ -163,6 +163,8 @@ export interface AgentSettingsPanelProps {
   busyMessageDefaultIsHost?: boolean;
   /** Tasks run only on this computer: the Team API has no task route. */
   taskLimitEditable?: boolean;
+  /** Maximum accepted by the local or negotiated host contract. */
+  taskLimitMax?: number;
   /** Backup models are local-only too: the Team API does not carry them. */
   backupModelsEditable?: boolean;
   /** The folders the agent can change besides its workspace. Local-only: the Team API does not carry them. */
@@ -1606,7 +1608,10 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                 <Show when={props.taskLimitEditable}>
                   <Select<TaskLimitChoice>
                     class="agent-settings-runtime-select"
-                    options={[...TASK_LIMIT_CHOICES]}
+                    options={TASK_LIMIT_CHOICES.filter(
+                      (choice) =>
+                        choice === "default" || Number(choice) <= (props.taskLimitMax ?? AGENT_TASK_LIMIT_MAX),
+                    )}
                     value={oneTurnAtATime() ? "1" : draft.taskLimit}
                     disabled={oneTurnAtATime()}
                     onChange={(next) => {

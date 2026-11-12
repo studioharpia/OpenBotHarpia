@@ -1,10 +1,15 @@
-import { Button, Plus } from "@openbot/ui";
+import { Button, PanelLeft, PanelTop, Plus } from "@openbot/ui";
 import { useText } from "@openbot/ui/text";
 import { createSignal, onSettled, Show } from "solid-js";
 import { ThreadMenu } from "./ThreadMenu";
 import { ThreadTabs } from "./ThreadTabs";
 import { carriedThreadTab } from "./thread-tab-drag";
-import type { ThreadHeaderProps, ThreadRowMode } from "./thread-types";
+import type { ThreadHeaderProps, ThreadPlacement, ThreadRowMode } from "./thread-types";
+
+// Existing row parts are shared by the sidebar, tabs and agent Central.
+export { threadAttention } from "./ThreadStatusMark";
+export { ThreadTitle } from "./ThreadTitle";
+export { startTaskTransfer, type TaskTransferActions, type TaskTransferSource } from "./task-transfer-drag";
 
 /** Below this free width a full tab does not fit, and the tabs become one menu button. */
 const COMPACT_BELOW = 200;
@@ -122,7 +127,8 @@ function ThreadRow(props: ThreadHeaderProps) {
       // The group width with the chevron shown, so a hidden chevron cannot change the fold again.
       const folded = fold();
       const chevronHidden = mode() === "minimal" && folded !== undefined && folded !== "name";
-      const width = box.width - (chevronHidden ? chevronRoom : 0);
+      const placementWidth = group.querySelector(".agent-threads-placement")?.getBoundingClientRect().width ?? 0;
+      const width = box.width - placementWidth - (chevronHidden ? chevronRoom : 0);
       // The free width without "+" and the list button, which the full row has. The model picker gets
       // smaller before the tabs and shows only its icon in the narrow modes, so its room counts as free.
       // The sum stays the same whatever size the picker has, so the mode does not change it again.
@@ -169,11 +175,47 @@ function ThreadRow(props: ThreadHeaderProps) {
  * thread" button, so its header stays almost the same. With a side thread, a menu of the side
  * threads shows, and the side threads with a tab show as tabs.
  */
-export function ThreadHeader(props: ThreadHeaderProps) {
+export function ThreadHeader(
+  props: ThreadHeaderProps & {
+    placement?: ThreadPlacement | undefined;
+    onPlacementChange?: ((placement: ThreadPlacement) => void) | undefined;
+  },
+) {
+  const { t } = useText();
   const single = () => props.tabs.length === 0 && props.threads.length === 0 && props.archived.length === 0;
+  const placementLabel = () =>
+    props.placement === "sidebar" ? t("conversation.threads.showTopbar") : t("conversation.threads.showSidebar");
   return (
-    <Show when={!single()} fallback={<NewThreadButton disabled={!props.canStartNew} onNew={props.onNew} />}>
-      <ThreadRow {...props} />
-    </Show>
+    <>
+      <Show
+        when={props.placement !== "sidebar"}
+        fallback={
+          <div class="agent-threads-header" data-mode="sidebar">
+            <NewThreadButton disabled={!props.canStartNew} onNew={props.onNew} />
+            <Show when={!single()}>
+              <ThreadMenu {...props} mode="minimal" />
+            </Show>
+          </div>
+        }
+      >
+        <Show when={!single()} fallback={<NewThreadButton disabled={!props.canStartNew} onNew={props.onNew} />}>
+          <ThreadRow {...props} />
+        </Show>
+      </Show>
+      <Show when={props.onPlacementChange}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          class="agent-threads-icon-button agent-threads-placement no-drag"
+          aria-label={placementLabel()}
+          title={placementLabel()}
+          onClick={() => props.onPlacementChange?.(props.placement === "sidebar" ? "topbar" : "sidebar")}
+        >
+          <Show when={props.placement === "sidebar"} fallback={<PanelLeft aria-hidden="true" />}>
+            <PanelTop aria-hidden="true" />
+          </Show>
+        </Button>
+      </Show>
+    </>
   );
 }

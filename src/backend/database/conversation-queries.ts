@@ -707,8 +707,8 @@ const PAGE_MESSAGE_LIMIT = 100;
 
 /**
  * The first whole groups of `rows`, until there are `target` rows. `rows` holds up to `cap + 1`
- * rows, so a group that reaches the end may be cut. A group that does not fit waits for the next
- * page, unless it is the first: a turn larger than `cap` is split rather than never shown.
+ * rows, so a group that reaches the end may be cut. Fill the remaining capacity with that group's
+ * nearest messages: otherwise one newer standalone message can hide a long running turn entirely.
  */
 function wholeGroups(rows: readonly DynamicRecord[], target: number, cap: number): DynamicRecord[] {
   const taken: DynamicRecord[] = [];
@@ -718,7 +718,7 @@ function wholeGroups(rows: readonly DynamicRecord[], target: number, cap: number
     let end = start + 1;
     while (end < rows.length && requiredStringColumn(rows[end] ?? {}, "group_id") === groupId) end += 1;
     if (end > cap) {
-      if (taken.length === 0) taken.push(...rows.slice(0, cap));
+      taken.push(...rows.slice(start, cap));
       break;
     }
     taken.push(...rows.slice(start, end));

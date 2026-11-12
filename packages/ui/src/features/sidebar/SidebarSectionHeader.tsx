@@ -4,7 +4,7 @@
  * caller - both regions that show a section header reach it through here.
  *
  * A folder in a folder names its parent before its own name, in muted text, because folders do not
- * indent. A folder header ends with a folder icon, and with the unread count while it is closed.
+ * indent. A closed folder header shows its unread count.
  */
 
 import { SIDEBAR_FOLDER_LEVELS } from "@openbot/contracts/ipc";
@@ -33,7 +33,6 @@ export function SidebarSectionHeader(headerProps: { sectionId: string; name: str
   const {
     customSectionById,
     duplicateSection,
-    filteredChatsBySection,
     foldersSupported,
     layoutMutable,
     moveFolderTo,
@@ -42,7 +41,6 @@ export function SidebarSectionHeader(headerProps: { sectionId: string; name: str
     pending,
     props,
     sectionCanNest,
-    sectionChildren,
     sectionIsCollapsed,
     sectionLabel,
     sectionParent,
@@ -67,10 +65,6 @@ export function SidebarSectionHeader(headerProps: { sectionId: string; name: str
   const parentId = () => sectionParent(headerProps.sectionId);
   const parentName = () => customSectionById().get(parentId() ?? "")?.name;
   const unread = () => (collapsed() ? sectionUnreadCount(headerProps.sectionId) : 0);
-  /** An open folder that holds nothing shows a closed folder icon. */
-  const empty = () =>
-    (filteredChatsBySection().get(headerProps.sectionId)?.length ?? 0) === 0 &&
-    sectionChildren(headerProps.sectionId).length === 0;
   const canHoldFolder = () => depth() + 1 < SIDEBAR_FOLDER_LEVELS;
   /** The folders this folder can move into, in list order, without the one it is in now. */
   const destinations = () =>
@@ -134,12 +128,6 @@ export function SidebarSectionHeader(headerProps: { sectionId: string; name: str
                     {Math.min(unread(), 99)}
                   </Badge>
                   <span class="sr-only">{t("sidebar.folder.unread", { count: unread() })}</span>
-                </Show>
-                <Show
-                  when={collapsed() || empty()}
-                  fallback={<FolderOpen class="sidebar-folder-icon size-4" aria-hidden="true" />}
-                >
-                  <Folder class="sidebar-folder-icon size-4" aria-hidden="true" />
                 </Show>
               </span>
             </Show>

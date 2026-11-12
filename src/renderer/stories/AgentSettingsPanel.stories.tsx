@@ -53,6 +53,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+/** The current host accepts ten concurrent tasks and preserves its default of four. */
+export const TenParallelTasks: Story = {
+  args: { taskLimitEditable: true, taskLimitMax: 10, agent: { ...STORY_AGENT, taskLimit: 10 } },
+};
+/** A released v1 host keeps its frozen choices even when this client supports ten. */
+export const LegacyTaskLimit: Story = {
+  args: { taskLimitEditable: true, taskLimitMax: 4, agent: { ...STORY_AGENT, taskLimit: 4 } },
+};
 export const Working: Story = { args: { working: true } };
 /** A Codex model with a fast tier: the Model picker menu shows Effort and the Fast switch, as in the chat header. */
 export const FastMode: Story = {

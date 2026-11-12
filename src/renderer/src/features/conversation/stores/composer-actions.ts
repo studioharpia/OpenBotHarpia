@@ -15,6 +15,7 @@ import {
   type QueueDelivery,
 } from "@openbot/contracts/ipc";
 import { TEAM_MESSAGE_CLIENT_ID_CAPABILITY } from "@openbot/contracts/team-protocol/current";
+import { MESSAGE_DELIVERY_CAPABILITY } from "@openbot/contracts/team-protocol/message-delivery-v1";
 import { isQueueEditRejected, TEAM_QUEUE_EDIT_CAPABILITY } from "@openbot/contracts/team-protocol/queue-edit-v1";
 import type { QuestionPromptComposerAnswer } from "@openbot/ui/components/QuestionPromptBubble";
 import {
@@ -801,7 +802,7 @@ export function createComposerActions(deps: ComposerActionsDeps) {
     targetOverride?: ConversationTarget,
     submittedSnapshot?: ComposerDraft,
     voice?: VoiceSend,
-    steer = false,
+    deliveryMode?: "queue" | "steer",
   ): Promise<boolean> {
     if (deps.attachmentBusy(targetOverride)) return false;
     if (!draftOverride && deps.currentEditingDeliveryId()) {
@@ -811,7 +812,7 @@ export function createComposerActions(deps: ComposerActionsDeps) {
     const target = targetOverride ?? (agentId ? { agentId, serverId: deps.props.server?.id ?? "local" } : undefined);
     const draft = copyComposerDraft(draftOverride ?? deps.currentDraft());
     const text = expandComposerMentions(draft.text);
-    const promptAnswer = promptAnswerFor(draft, target);
+    const promptAnswer = deliveryMode === "queue" ? undefined : promptAnswerFor(draft, target);
     if (promptAnswer && target) {
       if (deps.submitting() || !promptAnswer.answer(text)) return false;
       // An answer is not a message, so no spoken reply or voice recording belongs to it.
@@ -839,7 +840,7 @@ export function createComposerActions(deps: ComposerActionsDeps) {
     stopTeamTyping();
     deps.setComposerError(null, target);
     deps.clearConversationError(target);
-    queueSend(target, draft, text, voice, steer);
+    queueSend(target, draft, text, voice, deliveryMode);
     deps.clearSubmittedDraft(target, submittedSnapshot ?? draft);
     return true;
   }
@@ -853,7 +854,7 @@ export function createComposerActions(deps: ComposerActionsDeps) {
     draft: ComposerDraft,
     text: string,
     voice?: VoiceSend,
-    steer = false,
+    deliveryMode?: "queue" | "steer",
   ): void {
     const onScreen = () => {
       const activeTarget = deps.currentTarget();
@@ -870,9 +871,32 @@ export function createComposerActions(deps: ComposerActionsDeps) {
         deps.pendingSends.list(target).some((send) => send.state !== "failed"));
     // Read the send functions now: the send outlives this view when the user switches server.
     const send = deps.props.onSendMessage;
+    const sameServer = target.serverId === (deps.props.server?.id ?? LOCAL_SERVER_ID);
+    const agent = sameServer
+      ? deps.props.agent?.id === target.agentId
+        ? deps.props.agent
+        : deps.props.agents.find((candidate) => candidate.id === target.agentId)
+      : undefined;
+    const steers = agent !== undefined && providerSteersTurns(agent.provider);
+    const configuredMode = agent?.busyMessageMode ?? (sameServer ? deps.props.defaultBusyMessageMode : undefined);
     // An agent whose provider cannot steer takes the message as its next turn: Send now.
-    const steerQueued = agentSteers() ? deps.props.onSteerQueuedMessage : deps.props.onSendQueuedMessageNow;
+    const steerQueued = steers ? deps.props.onSteerQueuedMessage : deps.props.onSendQueuedMessageNow;
     const server = deps.props.server;
+    const atomicDelivery =
+      target.serverId === LOCAL_SERVER_ID ||
+      Boolean(
+        server?.id === target.serverId && server.compatibility?.capabilities.includes(MESSAGE_DELIVERY_CAPABILITY),
+      );
+    // Tab keeps the existing explicit Send now action for providers without native steering.
+    const sendNow = deliveryMode === "steer" && !steers;
+    const intent =
+      !deps.props.channel && atomicDelivery
+        ? {
+            // Enter uses the host's current preference, including hosts whose settings this member cannot read.
+            ...(deliveryMode ? { deliveryMode: sendNow ? ("queue" as const) : deliveryMode } : {}),
+            ...(onScreen() && deps.props.activeTurnId ? { expectedTurnId: deps.props.activeTurnId } : {}),
+          }
+        : undefined;
     // A deferred voice send can name a server that is no longer on screen. Its capabilities are not
     // known here, so only the local host, which always drops a repeat, is safe to retry then.
     const retrySafe =
@@ -891,6 +915,7 @@ export function createComposerActions(deps: ComposerActionsDeps) {
         target,
         pending.clientMessageId,
         pending.voiceRecordingDraftId ?? undefined,
+        intent,
       );
       if ("error" in result) {
         playActionSound("error");
@@ -898,7 +923,13 @@ export function createComposerActions(deps: ComposerActionsDeps) {
       } else {
         dictatedSent?.(result.messageId);
         // The id is the delivery's. Steer acts on the chat on screen, so not after a switch.
-        if (steer && onScreen()) steerQueued?.(result.messageId);
+        if (
+          (sendNow || !atomicDelivery) &&
+          deliveryMode === "steer" &&
+          onScreen() &&
+          (!steers || configuredMode !== "steer")
+        )
+          steerQueued?.(result.messageId);
       }
       return result;
     });
@@ -982,11 +1013,6 @@ export function createComposerActions(deps: ComposerActionsDeps) {
     void submitMessage();
   }
 
-  /** An ACP provider has no steer request, so its queued messages wait for the turn to end (#3689). */
-  function agentSteers(): boolean {
-    return !deps.props.agent || providerSteersTurns(deps.props.agent.provider);
-  }
-
   /**
    * Sends the draft into the running turn: Send, then Steer on its queue row, in one key. An agent
    * that steers each message sent while it works does that itself, so a second steer is not asked.
@@ -994,9 +1020,12 @@ export function createComposerActions(deps: ComposerActionsDeps) {
    */
   function steerComposer(): void {
     if (deps.attachmentBusy() || deps.uploadFailed() || deps.voicePhase() !== "idle" || !deps.agentReady()) return;
-    const hostSteers =
-      agentSteers() && (deps.props.agent?.busyMessageMode ?? deps.props.defaultBusyMessageMode) === "steer";
-    void submitMessage(undefined, undefined, undefined, undefined, !hostSteers);
+    void submitMessage(undefined, undefined, undefined, undefined, "steer");
+  }
+
+  function queueComposer(): void {
+    if (deps.attachmentBusy() || deps.uploadFailed() || deps.voicePhase() !== "idle" || !deps.agentReady()) return;
+    void submitMessage(undefined, undefined, undefined, undefined, "queue");
   }
 
   /** An instruction about selected text is a reply to that message. A failure shows on its row. */
@@ -1031,6 +1060,7 @@ export function createComposerActions(deps: ComposerActionsDeps) {
     submitMessage,
     submitComposer,
     steerComposer,
+    queueComposer,
     composerAnswersPrompt,
     sendSelectionInstruction,
     sendCardMessage,

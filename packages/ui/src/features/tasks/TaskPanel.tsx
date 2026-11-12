@@ -9,6 +9,7 @@ import { Show } from "solid-js";
 interface TaskPanelProps {
   /** Null for a start that waits for its Undo time. */
   task: AgentTask | null;
+  failureRead?: boolean | undefined;
   /** The title of a start that waits. */
   title: string;
   wait?: AgentTaskWait;
@@ -31,7 +32,9 @@ export function TaskPanel(props: TaskPanelProps) {
   return (
     <aside class="browser-panel tasks-panel" aria-label={t("conversation.tasks.panel.label", { title: title() })}>
       <header class="file-preview-header">
-        <Show when={props.task}>{(task) => <AgentTaskMark task={task()} wait={props.wait} />}</Show>
+        <Show when={!props.failureRead && props.task}>
+          {(task) => <AgentTaskMark task={task()} wait={props.wait} />}
+        </Show>
         <h2 title={title()}>{title()}</h2>
         <Show when={props.task}>
           {(task) => (

@@ -457,8 +457,27 @@ export class AgentUsage {
       if (cost !== null) entry.row.estimatedCostUsd = (entry.row.estimatedCostUsd ?? 0) + cost;
       entry.agents.add(requiredStringColumn(row, "agent_id"));
     }
+    // Completion belongs to the execution, not to a message or the task's mutable updated_at.
+    // Group before filtering dates: a later successful turn must not count the same task twice.
+    const completions = databaseRows(
+      this.#core.connection
+        .prepare(`
+        SELECT MIN(turn.completed_at) AS completed_at
+        FROM projection_turns AS turn
+        JOIN projection_agent_threads AS task ON task.thread_id = turn.thread_id
+        WHERE turn.status = 'completed' AND turn.completed_at IS NOT NULL
+          ${input.agentId ? "AND task.agent_id = ?" : ""}
+        GROUP BY task.thread_id
+      `)
+        .all(...(input.agentId ? [input.agentId] : [])),
+    );
+    const completedTasks = completions.filter((row) => {
+      const day = analyticsDate(new Date(requiredStringColumn(row, "completed_at")), input.timeZone);
+      return day >= input.startDate && day <= input.endDate;
+    }).length;
     return {
       ...input,
+      completedTasks,
       collectionStartedAt: this.collectionStartedAt(),
       updatedAt,
       totals: summary,

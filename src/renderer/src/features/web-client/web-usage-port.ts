@@ -30,7 +30,8 @@ export function createWebUsagePort(
       listAgents: () => workspace.runtime.listAgents(),
       onScopedEvent: (listener) =>
         workspace.onHostEvent((event) => {
-          if (event.type === "turn-completed") listener({ serverId: workspace.state.host?.hostId ?? "", event });
+          if (event.type === "turn-completed" || event.type === "agent-tasks-changed")
+            listener({ serverId: workspace.state.host?.hostId ?? "", event });
         }),
     },
     servers: {

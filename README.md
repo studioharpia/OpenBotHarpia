@@ -1,7 +1,20 @@
-# OpenBot
+# OpenBotHarpia
 
-[![CI](https://github.com/nightly-labs/openbot/actions/workflows/ci.yml/badge.svg)](https://github.com/nightly-labs/openbot/actions/workflows/ci.yml)
+[![CI](https://github.com/studioharpia/OpenBotHarpia/actions/workflows/ci.yml/badge.svg)](https://github.com/studioharpia/OpenBotHarpia/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm_Noncommercial_1.0.0-blue.svg)](LICENSE)
+
+Esta é a versão do OpenBot mantida pela HARPIA, derivada de
+[nightly-labs/openbot](https://github.com/nightly-labs/openbot). Preservamos a licença
+PolyForm Noncommercial 1.0.0 e os créditos em [NOTICE](NOTICE).
+
+O nome do aplicativo continua **OpenBot**. O código inclui as adaptações da HARPIA para tarefas,
+interface e serviço de contas próprio. Para desenvolvimento, publicação e limites dos workflows
+herdados, consulte [OpenBotHarpia](docs/openbot-harpia.md).
+
+Para acessar o Workspace da HARPIA, utilize a distribuição configurada para os nossos serviços ou
+a opção de entrada pelo navegador no convite. O instalador do projeto original usa os serviços
+oficiais por padrão. Instaladores deste repositório só estarão disponíveis quando uma release da
+HARPIA for publicada.
 
 OpenBot is a local-first desktop workspace for persistent AI teammates. It supports the local
 [Codex App Server](https://learn.chatgpt.com/docs/app-server) and
@@ -11,7 +24,8 @@ OpenCode, Gemini, [Cursor CLI](https://cursor.com/cli), [Cline CLI](https://clin
 conversation, and provides local queues, file transfers, an embedded browser, and agent-to-agent
 messaging in one desktop app.
 
-OpenBot is ready for production use. A new release ships almost every day.
+The sections below document the application inherited from upstream. Release availability and
+verification of this distribution are tracked separately by HARPIA.
 
 > [!WARNING]
 > Agents run with `danger-full-access` and `approvalPolicy: never`. They can read and modify files,
@@ -46,17 +60,17 @@ or arm64 Linux as an AppImage.
 
 ### macOS
 
-1. Download the latest `OpenBot-*-arm64.dmg` (or `OpenBot-*-x64.dmg` on an Intel Mac) from [GitHub Releases](https://github.com/nightly-labs/openbot/releases).
+1. When a HARPIA release is available, download `OpenBot-*-arm64.dmg` (or `OpenBot-*-x64.dmg` on an Intel Mac) from [GitHub Releases](https://github.com/studioharpia/OpenBotHarpia/releases).
 2. Drag OpenBot to Applications and open it.
 
 ### Windows
 
-1. Download the latest `OpenBot-*-x64.exe` from [GitHub Releases](https://github.com/nightly-labs/openbot/releases).
+1. When a HARPIA release is available, download `OpenBot-*-x64.exe` from [GitHub Releases](https://github.com/studioharpia/OpenBotHarpia/releases).
 2. Run the installer and open OpenBot.
 
 ### Linux
 
-1. Download the latest `OpenBot-*-x86_64.AppImage` (or `OpenBot-*-arm64.AppImage` on arm64) from [GitHub Releases](https://github.com/nightly-labs/openbot/releases).
+1. When a HARPIA release is available, download `OpenBot-*-x86_64.AppImage` (or `OpenBot-*-arm64.AppImage` on arm64) from [GitHub Releases](https://github.com/studioharpia/OpenBotHarpia/releases).
 2. Make it executable with `chmod +x OpenBot-*.AppImage`, then run it.
 
 The AppImage does not need libfuse2, so it also runs on Arch Linux and Omarchy. It mounts itself
@@ -404,6 +418,7 @@ See [web client delivery](docs/web-client.md) for the release gate and focused c
 | Command | Purpose |
 | --- | --- |
 | `bun run dev` | Start the local Auth API, Signal service, and Electron client with renderer HMR on its app profile. Ports are allocated through the dev registry, so a sibling worktree never takes one this stack won. It refuses a second stack in the same worktree unless you pass `--force`. Each worktree opens a profile of its own, keyed to its path; `--shared` opens the shared `OpenBot Dev` profile instead. `--isolated` is still accepted and changes nothing. A profile that you used before stays on disk unchanged. `--hosting=test` signs the app in to the `test` account Worker, on a profile that all worktrees share, so that a hosted server is a real VM; see [docs/hosted-servers.md](docs/hosted-servers.md#real-servers-from-a-development-build). A profile that does not exist yet is seeded with the showcase data of `bun run dev:seed` before the client starts, so a first start never opens an empty app; an existing profile is left as it is. An isolated profile still shares the computer's provider CLI store, so it does not download the pinned CLIs again. Before it starts, it runs `bun install --frozen-lockfile` and `bun run api:migrate:local` only when `bun.lock`, a workspace `package.json`, a patch, or a migration changed since their last successful run. The stamps are in `node_modules` and `apps/auth-api/.wrangler/state/v3/d1`, and each `bun install` writes the install stamp too; delete one to run its step again. |
+| `OPENBOT_DEV_BACKGROUND=1 bun run dev` | Start development windows without activating them, for background UI automation. Packaged applications ignore this flag. |
 | `bun run preview` | Preview the built Electron client with the green preview icon. |
 | `bun run mobile:go` | Start the mobile app in Expo Go and clear the Metro cache. |
 | `bun mobile:ios` | Build and launch the iOS simulator app without RocketSim. |
@@ -419,6 +434,9 @@ See [web client delivery](docs/web-client.md) for the release gate and focused c
 | `bun run api:migrate:local` | Apply D1 migrations to the local development database. |
 | `bun run api:migrate:remote` | Apply D1 migrations to the configured remote database. |
 | `bun run api:deploy` | Build and deploy the account API to Cloudflare Workers. It sets the Stripe, boat, claim and OpenPanel secret sets that are in the production environment. A set that is not there keeps the value that the Worker has. |
+| `bun run --cwd apps/auth-api build:vps` | Compila o serviço de contas para VPS própria, sem Workers, D1 ou R2 remotos. Veja [contas em VPS](docs/contas-vps.md). |
+| `bun run --cwd apps/auth-api start:vps` | Inicia o artefato compilado com as variáveis fornecidas pelo gerenciador da VPS e estado SQLite persistente. |
+| `bun run --cwd apps/auth-api test:vps` | Executa os E2Es isolados de SQLite, objetos, SMTP/TLS, runtime e login/convites HTTP. |
 | `bun run api:stripe:bootstrap` | Create or update the Stripe plan catalog and the Customer Portal settings from `STRIPE_SECRET_KEY` in the encrypted `apps/auth-api/.env.dev` (shell values replace it). It refuses a live key unless you add `--live`. For local webhooks, run `stripe listen --forward-to localhost:<API port>/v1/stripe/webhook` and set the signing secret in `STRIPE_WEBHOOK_SECRET`. See [Billing](docs/architecture/servers.md#billing). |
 | `bun run hosting:setup --target=production\|test` | Set up the Stripe catalog, the Customer Portal, and the Stripe and boat webhooks of one account server, and store the webhook signing secrets: production in the `cloudflare-production` GitHub Environment, test in the encrypted `apps/auth-api/.env.dev`. See [hosted servers](docs/hosted-servers.md#production). |
 | `bun run hosting:template` | Build the boat named snapshot that new hosted servers start from. Needs `BOAT_TEMPLATE_API_KEY` and `--version`, `--appimage-url`, `--appimage-sha256` and `--auth-api-url`. See [hosted servers](docs/hosted-servers.md). |
@@ -465,7 +483,8 @@ See [web client delivery](docs/web-client.md) for the release gate and focused c
 | `bun run cua-driver:doctor` | Print, as JSON, which `cua-driver` binary OpenBot would use for Computer Use, and the driver's own `doctor` report. Read-only, and it starts no daemon. `OPENBOT_CUA_DRIVER_PATH` selects a different binary in a checkout; an installed application runs only the driver it was released with. |
 | `bun run prepare:cua-driver` | Write the pinned Computer Use driver to `build/cua-driver/<platform>/<arch>`, verifying every SHA-256 in `native-runtime.lock.json`. Name another target with `bun scripts/install-cua-driver.ts <platform> <arch>`. Every packaging command runs this first. |
 | `bun run pin:cua-driver <version>` | Print a new `cuaDriver` block for `native-runtime.lock.json` from a published `cua-driver` release. Downloads the release assets of all five targets and hashes each shipped file. |
-| `bun run package` | Build an unpacked local application for the architecture of this Mac. |
+| `bun run package` | Build an unpacked local application for this Mac, signed with an existing Apple certificate. |
+| `bun scripts/package-macos-local.ts --check` | Check the local Apple signing identity and verify that different binaries retain the same identity, without building or installing. |
 | `bun run package:verify` | Build and verify the real app bundle for this Mac, icon, metadata, ASAR, and fuses. |
 | `bun run package:win` | Build an unpacked local Windows x64 application on Windows. |
 | `bun run package:win:verify` | Build and verify the Windows x64 application on Windows. |
@@ -474,7 +493,7 @@ See [web client delivery](docs/web-client.md) for the release gate and focused c
 | `bun run package:linux:verify` | Build and verify the Linux x64 application on Linux. Run it under `xvfb-run -a` without a display. |
 | `bun scripts/create-github-app.ts [--org <org>]` | Create the OpenBot GitHub App from `scripts/github-app/manifest.json` with the manifest flow. Prints the Client ID for `src/main/github-connector-config.ts` and writes the app secrets to `~/.config/openbot/github-app-<slug>.json` (mode 0600). Enable Device Flow in the app settings after the run. |
 | `bun run release:preflight` | Verify version, Git state, and GitHub release secrets before tagging. |
-| `bun run dist:mac` | Build unsigned local DMG and ZIP update artifacts for this Mac. |
+| `bun run dist:mac` | Build locally signed DMG and ZIP artifacts for this Mac; no notarization. |
 | `bun run dist:win` | Build an unsigned Windows x64 NSIS installer on Windows. |
 | `bun run dist:linux` | Build an unsigned Linux x64 AppImage on Linux. |
 | `bun run dist:linux:arm64` | Build an unsigned Linux arm64 AppImage on arm64 Linux. |

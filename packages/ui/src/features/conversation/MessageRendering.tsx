@@ -334,6 +334,7 @@ export function MessageBody(props: {
   onPreview: (attachment: AttachmentSummary) => void;
   onAttachmentAction: (attachment: AttachmentSummary, action: "open" | "reveal" | "download") => void;
   onOpenSharedFile?: ((path: string, asWritten?: string) => void) | undefined;
+  onRevealLocalFile?: ((path: string, kind: "shared" | "workspace") => void) | undefined;
   onOpenWorkspaceFile?: ((path: string, asWritten?: string) => void) | undefined;
   /** Opens the passage that a quote in the message points to. */
   onOpenQuote?: ((messageId: string, text: string) => void) | undefined;
@@ -617,6 +618,7 @@ export function MessageBody(props: {
       onOpenImage={openMarkdownImage}
       onOpenSharedFile={props.onOpenSharedFile}
       onOpenWorkspaceFile={props.onOpenWorkspaceFile}
+      onRevealLocalFile={props.onRevealLocalFile}
       onOpenQuote={props.onOpenQuote}
       onOpenTag={props.onOpenTag}
     />
@@ -785,6 +787,7 @@ export function MessageBody(props: {
                             onOpenImage={openMarkdownImage}
                             onOpenSharedFile={props.onOpenSharedFile}
                             onOpenWorkspaceFile={props.onOpenWorkspaceFile}
+                            onRevealLocalFile={props.onRevealLocalFile}
                             onOpenQuote={props.onOpenQuote}
                             onOpenTag={props.onOpenTag}
                             showCitationFooter={index === lastTextBlockIndex()}

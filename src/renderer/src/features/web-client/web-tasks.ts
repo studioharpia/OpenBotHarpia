@@ -1,3 +1,4 @@
+import { AGENT_TASK_LIMIT_V2_CAPABILITY } from "@openbot/contracts/team-protocol/agent-task-limit-v2";
 import { runTeamEffect } from "@openbot/team-client";
 import {
   agentTaskControl,
@@ -22,7 +23,14 @@ export function webTasksSource(
     runTeamEffect(effect.pipe(Effect.mapError((error) => error.cause)));
 
   return {
-    list: (agentId, serverId) => run(listAgentTasks(hostRequest(serverId), agentId)),
+    list: (agentId, serverId) =>
+      run(
+        listAgentTasks(
+          hostRequest(serverId),
+          agentId,
+          workspace.state.capabilities.includes(AGENT_TASK_LIMIT_V2_CAPABILITY),
+        ),
+      ),
     read: (input, serverId) => run(readAgentTask(hostRequest(serverId), input).pipe(Effect.map(withoutPreviewUrls))),
     start: (input, serverId) => run(startAgentTask(hostRequest(serverId), input)),
     send: (input, serverId) => run(sendAgentTaskMessage(hostRequest(serverId), input)),

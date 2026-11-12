@@ -1208,7 +1208,11 @@ export class ChannelService {
     // task record while the previous owner still runs its turn, so the identity of the owner
     // alone does not show that the task is free: the assignment of the previous owner does.
     return (
-      assignments.some((assignment) => assignment.agentId === task.ownerAgentId || assignment.taskId === task.id) ||
+      assignments.some(
+        (assignment) =>
+          (assignment.agentId === task.ownerAgentId && assignment.channelId === task.channelId) ||
+          assignment.taskId === task.id,
+      ) ||
       assignments.filter((assignment) => assignment.channelId === task.channelId).length >= CHANNEL_PARALLEL_LIMIT ||
       task.dependencies.some((id) => {
         const dependency = tasks.get(id);
@@ -4063,8 +4067,8 @@ function descendants(tasks: ChannelTask[], id: string): ChannelTask[] {
 }
 /**
  * Whether two tasks need the same browser or workspace. "host" is what an earlier version stored as
- * the default, and like "none" and an empty list it reserves nothing: each agent runs one channel
- * turn at a time, and that is the only limit on work that declares no resource.
+ * the default, and like "none" and an empty list it reserves nothing: each channel keeps its own ordered
+ * lane, while provider and host limits bound work that declares no resource.
  */
 function resourcesConflict(left: string[], right: string[]): boolean {
   return left.some(

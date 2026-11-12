@@ -33,6 +33,10 @@ import { AGENT_IMPORT_CAPABILITY } from "@openbot/contracts/team-protocol/agent-
 import { AGENT_NEW_CHAT_ROUTES } from "@openbot/contracts/team-protocol/agent-new-chat-v1";
 import { AGENT_PLAN_CARD_ROUTES } from "@openbot/contracts/team-protocol/agent-plan-card-v1";
 import { AGENT_TASK_LIMIT_ROUTES } from "@openbot/contracts/team-protocol/agent-task-limit-v1";
+import {
+  AGENT_TASK_LIMIT_V2_CAPABILITY,
+  AGENT_TASK_LIMIT_V2_ROUTES,
+} from "@openbot/contracts/team-protocol/agent-task-limit-v2";
 import { AGENT_TASKS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-tasks-v1";
 import { AGENT_THREAD_FILES_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-files-v1";
 import { BROWSER_PROFILES_CAPABILITY } from "@openbot/contracts/team-protocol/browser-profiles-v1";
@@ -893,12 +897,26 @@ function WebWorkspaceFrame(props: WebWorkspaceProps) {
           },
         }),
       getAgentTaskLimit: (agentId, serverId) =>
-        hostRequest(serverId)("POST", AGENT_TASK_LIMIT_ROUTES.settings, decodeAgentTaskLimitSettings, { agentId }),
+        hostRequest(serverId)(
+          "POST",
+          workspace.state.capabilities.includes(AGENT_TASK_LIMIT_V2_CAPABILITY)
+            ? AGENT_TASK_LIMIT_V2_ROUTES.settings
+            : AGENT_TASK_LIMIT_ROUTES.settings,
+          decodeAgentTaskLimitSettings,
+          { agentId },
+        ),
       updateAgentTaskLimit: ({ agentId, taskLimit }, serverId) =>
-        hostRequest(serverId)("POST", AGENT_TASK_LIMIT_ROUTES.update, decodeAgentTaskLimitSettings, {
-          agentId,
-          taskLimit,
-        }),
+        hostRequest(serverId)(
+          "POST",
+          workspace.state.capabilities.includes(AGENT_TASK_LIMIT_V2_CAPABILITY)
+            ? AGENT_TASK_LIMIT_V2_ROUTES.update
+            : AGENT_TASK_LIMIT_ROUTES.update,
+          decodeAgentTaskLimitSettings,
+          {
+            agentId,
+            taskLimit,
+          },
+        ),
       getAgentNewChat: (agentId, serverId) =>
         hostRequest(serverId)("POST", AGENT_NEW_CHAT_ROUTES.settings, decodeAgentNewChatSettings, { agentId }),
       updateAgentNewChat: ({ agentId, allowNewChat }, serverId) =>
@@ -2649,6 +2667,21 @@ function WebWorkspaceFrame(props: WebWorkspaceProps) {
                       agentsOpen={!tasksAgentsHidden()}
                       onToggleAgents={() => setTasksAgentsOpen(tasksAgentsHidden())}
                       source={tasksSource}
+                      onRenameTask={
+                        agentThreads()?.tasks.editable()
+                          ? async (task, title) => {
+                              await agentThreads()?.tabs.rename(task.agentId, task.id, title);
+                            }
+                          : undefined
+                      }
+                      onDeleteTask={
+                        agentThreads()?.tasks.editable()
+                          ? async (task) => {
+                              await agentThreads()?.tabs.remove(task.agentId, task.id);
+                            }
+                          : undefined
+                      }
+                      hiddenTaskIds={agentThreads()?.tabs.hidden()}
                       mediaSource={runtime.attachmentMedia}
                       files={{
                         accepted: () => workspace.state.capabilities.includes(AGENT_THREAD_FILES_CAPABILITY),
@@ -2668,8 +2701,9 @@ function WebWorkspaceFrame(props: WebWorkspaceProps) {
                         await workspace.approve({ requestId: approval.requestId, decision });
                         return true;
                       }}
-                      onRead={(input, messageId) =>
-                        agentThreads()?.tasks.markTaskRead(input.agentId, input.taskId, messageId)
+                      failureRead={(task) => agentThreads()?.tasks.failureRead(task) ?? false}
+                      onRead={(task, messageId) =>
+                        agentThreads()?.tasks.markTaskRead(task.agentId, task.id, messageId, task)
                       }
                       waitsForAnswer={(task) =>
                         workspace.state.prompts.some(
@@ -2903,6 +2937,7 @@ function WebWorkspaceFrame(props: WebWorkspaceProps) {
               <Show when={agentChatOpen()}>
                 <Conversation
                   runtime={runtime}
+                  usagePort={usageCalls}
                   onOpenMarketplace={openMarketplace}
                   connectors={connectors}
                   onOpenMarketplaceApp={(request) => {
@@ -3000,14 +3035,14 @@ function WebWorkspaceFrame(props: WebWorkspaceProps) {
                     await workspace.runtime.setAvatar(agentId, image);
                     await workspace.refresh();
                   }}
-                  onSendMessage={async (text, attachments, replyTo, target, clientMessageId) => {
+                  onSendMessage={async (text, attachments, replyTo, target, clientMessageId, _voice, delivery) => {
                     // A sent prompt is what a notification later reports, so the browser asks here, from the user's action.
                     requestWebNotificationPermission();
                     const id = target?.agentId ?? workspace.state.selectedId;
                     // A send for a host the user has left would reach the one they opened instead.
                     if (!id || (target && target.serverId !== server()?.id))
                       return { error: t("webClient.error.checkConversation") };
-                    return workspace.send(id, text, attachments, replyTo, clientMessageId);
+                    return workspace.send(id, text, attachments, replyTo, clientMessageId, delivery);
                   }}
                   onMarkRead={workspace.markRead}
                   onDeleteMessage={agentDeleteMessageAction()}

@@ -1,10 +1,6 @@
 appId: app.openbot.desktop
 productName: OpenBot
 copyright: Copyright © 2026 Synthetify Labs spółka z ograniczoną odpowiedzialnością
-protocols:
-  - name: OpenBot invitations
-    schemes:
-      - openbot
 asar: true
 artifactName: ${productName}-${version}-${arch}.${ext}
 electronUpdaterCompatibility: ">=2.16"
@@ -18,10 +14,7 @@ electronFuses:
   onlyLoadAppFromAsar: true
   loadBrowserProcessSpecificV8Snapshot: false
   grantFileProtocolExtraPrivileges: false
-publish:
-  provider: github
-  owner: nightly-labs
-  repo: openbot
+publish: null
 files:
   - out/**/*
   - package.json
@@ -137,8 +130,8 @@ mac:
   # Developer ID signature is kept. Notarization accepts a nested binary signed by another team.
   signIgnore:
     - Contents/Resources/cua-driver/
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.inherit.plist
+  entitlements: build/entitlements.local.plist
+  entitlementsInherit: build/entitlements.local.inherit.plist
   darkModeSupport: true
   extendInfo:
     CFBundleIconName: Icon

@@ -6,14 +6,13 @@ import { TextProvider, useText } from "@openbot/ui/text";
 import type { JSX } from "@solidjs/web";
 import { Link } from "@tanstack/solid-router";
 import { createSignal, Loading, lazy, Match, onSettled, Show, Switch } from "solid-js";
+import { loadClientAgentAvatar } from "../client-agent-avatar";
 import { LandingFooter } from "../landing/LandingFooter";
 import { LandingIcon } from "../landing/LandingIcon";
 import { SiteHeader } from "../landing/SiteHeader";
 
 // Browser-only, as on the shared agent page: the Worker renders an empty box and the browser draws it.
-const AgentAvatar = lazy(() =>
-  import("@openbot/ui/features/agents/AgentAvatar").then((module) => ({ default: module.AgentAvatar })),
-);
+const AgentAvatar = lazy(loadClientAgentAvatar);
 
 /** The page around every Marketplace screen: the site header and footer, and the catalog of the page's language. */
 export function MarketplaceFrame(props: { lang: string; locale: TranslatedLocale; children: JSX.Element }) {

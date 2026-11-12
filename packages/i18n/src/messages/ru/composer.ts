@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "Действия шаблона",
+  "composer.templates.hint": "Введите / в чате, чтобы вставить сохранённый промпт.",
+  "composer.templates.new": "Новый шаблон",
+  "composer.templates.empty": "Шаблонов пока нет.",
+  "composer.templates.editor": "Шаблон промпта",
+  "composer.templates.name": "Название",
+  "composer.templates.prompt": "Промпт",
+  "composer.templates.storageError": "Не удалось прочитать или сохранить шаблоны.",
+  "composer.templates.delete": "Удалить шаблон?",
+  "composer.templates.noMatch": "Шаблоны не найдены.",
+  "composer.templates.list": "Шаблоны промптов",
   "composer.queueEdit.body":
     "Вы редактируете сообщение в очереди. Сохраните или отмените правку, чтобы разрешить его выполнение.",
   "composer.queueEdit.cancel": "Отменить правку",
@@ -76,6 +87,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "Сообщение агенту",
   "composer.placeholder.answer": "Введите ответ",
   "composer.add.label": "Добавить в запрос",
+  "composer.add.queue": "Добавить в очередь",
   "composer.add.files": "Прикрепить файлы",
   "composer.add.skill": "Использовать навык",
   "composer.upload.cancel": "Отменить загрузку",

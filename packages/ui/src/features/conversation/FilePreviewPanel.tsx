@@ -43,6 +43,8 @@ const HIGHLIGHT_LINE_LIMIT = 5_000;
 const BLOB_PREVIEW_KINDS = new Set<FilePreview["previewKind"]>(["image", "pdf", "audio", "video"]);
 
 interface FilePreviewPanelProps {
+  /** When supplied, the containing dock owns resizing and persistence. */
+  width?: number | undefined;
   readWidth: (fallback: number, min: number, max: number) => number;
   onResizeEnd: (width: number) => void;
   onResetWidth: () => void;
@@ -136,7 +138,7 @@ export default function FilePreviewPanel(props: FilePreviewPanelProps) {
   createEffect(
     () => panelWidth(),
     (width) => {
-      props.onWidthChange(width);
+      if (props.width === undefined) props.onWidthChange(width);
     },
   );
   // A memo, because an effect runs again on an equal value and a file read again has an equal key.
@@ -226,7 +228,7 @@ export default function FilePreviewPanel(props: FilePreviewPanelProps) {
         label={t("preview.panel.resize")}
         controls="file-preview-panel"
         direction="right"
-        value={panelWidth()}
+        value={props.width ?? panelWidth()}
         defaultValue={defaultPanelWidth()}
         min={PANEL_MIN}
         max={props.maxWidth}

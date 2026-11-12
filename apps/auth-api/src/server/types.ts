@@ -5,7 +5,13 @@ import type { Effect } from "effect";
 import type { AuthStoreError } from "./d1-auth-repository";
 import type { EmailDeliveryError } from "./email-delivery";
 import { observedD1 } from "./observed-d1";
-import type { SmtpContactMessage, SmtpFailure, SmtpLicenseMessage, SmtpWelcomeMessage } from "./smtp-email-delivery";
+import type {
+  SmtpConnector,
+  SmtpContactMessage,
+  SmtpFailure,
+  SmtpLicenseMessage,
+  SmtpWelcomeMessage,
+} from "./smtp-email-delivery";
 
 export interface WorkerBindings {
   DB: D1Database;
@@ -22,10 +28,14 @@ export interface WorkerBindings {
   /** Checked by the bug report route only, so a Worker without it keeps its other routes. */
   FEEDBACK_RATE_LIMITER?: RateLimit;
   AUTH_EXPOSE_DEVELOPMENT_CODE?: string;
+  /** Set only by the standalone HTTP server from its validated public origin. */
+  ACCOUNT_INVITE_ORIGIN?: string;
   EMAIL_SMTP_HOST?: string;
   EMAIL_SMTP_PORT?: string;
   EMAIL_SMTP_USERNAME?: string;
   EMAIL_SMTP_PASSWORD?: string;
+  /** Native TLS adapter supplied by the standalone service; Workers use their socket connector. */
+  EMAIL_SMTP_CONNECTOR?: SmtpConnector;
   EMAIL_FROM?: string;
   /** The sender of license emails. Empty uses `EMAIL_FROM`. The SMTP account must be allowed to send as it. */
   EMAIL_LICENSE_FROM?: string;

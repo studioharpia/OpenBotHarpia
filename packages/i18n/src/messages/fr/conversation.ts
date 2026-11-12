@@ -2,6 +2,28 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/conversation";
 
 export const messages = {
+  "conversation.threads.error.transfer": "Impossible de déplacer la tâche.",
+
+  "conversation.sidePanel.pane.central": "Centre de l’agent",
+  "conversation.central.mainChat": "Conversation principale",
+  "conversation.central.overview": "Vue d’ensemble",
+  "conversation.central.currentMonth": "Ce mois-ci",
+  "conversation.central.previousMonth": "Mois dernier",
+  "conversation.central.tokens": "Tokens utilisés",
+  "conversation.central.finishedTasks": "Tâches terminées",
+  "conversation.central.finishedHint":
+    "Chaque tâche est comptée une fois, à sa première réussite. Les tâches archivées sont incluses.",
+  "conversation.central.completedTasks": "Terminées",
+  "conversation.central.inProgressTasks": "En cours",
+  "conversation.central.emptySection": "Aucune tâche dans cette section.",
+  "conversation.central.statusRunning": "En cours",
+  "conversation.central.statusStarting": "Connexion",
+  "conversation.central.statusReady": "Disponible",
+  "conversation.central.statusUnavailable": "Indisponible",
+  "conversation.central.activity": "Activité des tokens",
+  "conversation.central.archivedTasks": "Archivées",
+  "conversation.central.newTask": "Nouvelle tâche",
+  "conversation.central.taskActions": "Actions pour {title}",
   "conversation.globalSearch.title": "Rechercher dans OpenBot",
   "conversation.globalSearch.filter": "Filtrer les résultats",
   "conversation.globalSearch.tab.all": "Tout",
@@ -63,6 +85,8 @@ export const messages = {
   "conversation.sidePanel.pane.browser": "Navigateur",
   "conversation.sidePanel.pane.files": "Fichiers",
   "conversation.threads.new": "Nouveau fil",
+  "conversation.threads.showSidebar": "Afficher les tâches dans la barre latérale",
+  "conversation.threads.showTopbar": "Afficher les tâches dans la barre du haut",
   "conversation.threads.all": "Tous les fils",
   "conversation.threads.open": "Fils ouverts",
   "conversation.threads.current": "Fil : {title}",

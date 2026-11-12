@@ -1,3 +1,4 @@
+import type { SendMessageInput } from "@openbot/contracts/ipc";
 import {
   type AgentEvent,
   type AgentRuntimeSnapshot,
@@ -9,6 +10,7 @@ import {
 } from "@openbot/contracts/ipc";
 import { cleanAgentMessageText } from "@openbot/team-client/agent-message-text";
 import type { AgentMessage } from "@openbot/ui/data";
+import { MAIN_THREAD_ID } from "@openbot/ui/features/conversation/threads/thread-types";
 import { currentText } from "@openbot/ui/text";
 import { createEffect, createMemo, createStore, onCleanup, untrack } from "solid-js";
 import { desktopAnalytics } from "../../analytics";
@@ -26,6 +28,7 @@ import { createScopeGuard } from "../../scope-lifetime";
 import { createSimpleContext } from "../../simple-context";
 import { useTurns } from "../../turns";
 import { useAgentTasks } from "../agent-tasks/agent-tasks-context";
+import { useAgentThreads } from "../agent-threads/agent-threads-context";
 import { useAgentReadTracking } from "../agents/agent-read-tracking";
 import { appendLatestRuntimeMessages, attentionKey } from "../agents/agent-runtime-snapshot";
 import { useAgents } from "../agents/agents-context";
@@ -121,6 +124,7 @@ const Conversation = createSimpleContext({
     const { agentChatsToMarkRead, agentChatsToRetryRead, autoReadAgentMessages } = useAgentReadTracking();
     const scopeIsCurrent = createScopeGuard();
     const agentTasks = useAgentTasks();
+    const agentThreads = useAgentThreads();
     const { activeDirectMemberId } = useDirectMessages();
     const channels = useChannels();
     const {
@@ -138,6 +142,8 @@ const Conversation = createSimpleContext({
       setUiErrors,
     } = useAgents();
     const {
+      failedTurns,
+      setFailedTurns,
       completedTurnByAgent,
       pendingPrompts,
       setPendingPrompts,
@@ -893,6 +899,43 @@ const Conversation = createSimpleContext({
       return page;
     }
 
+    const acknowledgingFailures = new Set<string>();
+    createEffect(
+      () => {
+        const agentId = activeAgentId();
+        const conversation = agentId ? conversations[agentId] : undefined;
+        const tab = agentId ? agentThreads.activeId(agentId) : null;
+        return {
+          agentId,
+          turnId: agentId ? failedTurns()[agentId] : undefined,
+          readable: Boolean(
+            agentId &&
+              isAgentChatReadable(agentId) &&
+              agentTasks.snapshot(agentId) !== undefined &&
+              (!tab || tab === MAIN_THREAD_ID) &&
+              conversation?.loaded &&
+              conversation.windowMode !== "around",
+          ),
+          serverId: activeServerId(),
+        };
+      },
+      ({ agentId, turnId, readable, serverId }) => {
+        if (!agentId || !turnId || !readable || acknowledgingFailures.has(turnId)) return;
+        acknowledgingFailures.add(turnId);
+        void conversationPort()
+          .agent.acknowledgeFailedTurn({ agentId, turnId }, serverId)
+          .then(() => {
+            if (scopeIsCurrent())
+              setFailedTurns((current) => (current[agentId] === turnId ? withoutAgent(current, agentId) : current));
+          })
+          .catch((error: unknown) => {
+            if (scopeIsCurrent())
+              appendUiError(agentId, error, currentText().t("app.errorStatus.acknowledge"), serverId);
+          })
+          .finally(() => acknowledgingFailures.delete(turnId));
+      },
+    );
+
     function markReplyCompleted(agentId: string) {
       clearRecentReply(agentId);
       if (appFocused()) return;
@@ -915,6 +958,7 @@ const Conversation = createSimpleContext({
       target?: { agentId: string; serverId: string },
       clientMessageId?: string,
       voiceRecordingDraftId?: string,
+      delivery?: Pick<SendMessageInput, "deliveryMode" | "expectedTurnId">,
     ): Promise<SendMessageResult> {
       const agentId = target?.agentId ?? activeAgent()?.id;
       const serverId = target?.serverId ?? activeServerId();
@@ -928,6 +972,7 @@ const Conversation = createSimpleContext({
         serverId,
         clientMessageId,
         voiceRecordingDraftId,
+        delivery,
       );
     }
 
@@ -940,6 +985,7 @@ const Conversation = createSimpleContext({
       serverId = activeServerId(),
       clientMessageId?: string,
       voiceRecordingDraftId?: string,
+      delivery?: Pick<SendMessageInput, "deliveryMode" | "expectedTurnId">,
     ): Promise<SendMessageResult> {
       const analytics = desktopAnalytics.scope();
       const properties = analyticsAgentProperties(agentId);
@@ -949,6 +995,7 @@ const Conversation = createSimpleContext({
           agentId,
           text: body.trim(),
           attachmentDraftIds,
+          ...delivery,
           ...(replyToMessageId ? { replyToMessageId } : {}),
           ...(clientMessageId ? { clientMessageId } : {}),
           ...(voiceRecordingDraftId ? { voiceRecordingDraftId } : {}),

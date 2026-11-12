@@ -134,6 +134,15 @@ export class ConversationReader {
     return this.#reads.markReadForThread(memberId, threadId, throughMessageId, options);
   }
 
+  markThreadUnread(
+    memberId: string,
+    threadId: string,
+    fromMessageId: string,
+    options: ConversationMarkerExclusions = {},
+  ) {
+    return this.#reads.markUnreadForThread(memberId, threadId, fromMessageId, options);
+  }
+
   readonly markRead = Effect.fn("ConversationReader.markRead")(function* (
     this: ConversationReader,
     agentId: string,

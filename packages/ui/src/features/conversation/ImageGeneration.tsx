@@ -83,6 +83,7 @@ export function ImageGeneration(props: ImageGenerationProps) {
           "image-generation-failed": hasFailure(),
         },
       ]}
+      data-presentation={props.presentation ?? "generated"}
       aria-label={hasImage() ? label() : isAttachment() ? t("chat.image.attachment") : t("chat.image.generation")}
       aria-live={props.status === "generating" ? "polite" : undefined}
     >

@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "テンプレートの操作",
+  "composer.templates.hint": "チャットで / を入力して保存したプロンプトを挿入します。",
+  "composer.templates.new": "新しいテンプレート",
+  "composer.templates.empty": "テンプレートはありません。",
+  "composer.templates.editor": "プロンプトテンプレート",
+  "composer.templates.name": "名前",
+  "composer.templates.prompt": "プロンプト",
+  "composer.templates.storageError": "テンプレートの読み込みまたは保存ができませんでした。",
+  "composer.templates.delete": "テンプレートを削除しますか？",
+  "composer.templates.noMatch": "該当するテンプレートはありません。",
+  "composer.templates.list": "プロンプトテンプレート",
   "composer.queueEdit.body": "キュー内のメッセージを編集中です。実行するには編集を保存するかキャンセルしてください。",
   "composer.queueEdit.cancel": "編集をキャンセル",
   "composer.providerWait.offlineTitle": "インターネットに接続されていません",
@@ -76,6 +87,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "エージェントにメッセージを送る",
   "composer.placeholder.answer": "回答を入力",
   "composer.add.label": "プロンプトに追加",
+  "composer.add.queue": "メッセージを待機",
   "composer.add.files": "ファイルを添付",
   "composer.add.skill": "スキルを使う",
   "composer.upload.cancel": "アップロードをキャンセル",

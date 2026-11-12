@@ -277,6 +277,7 @@ export function createThreadComposerActions(deps: ThreadComposerActionsDeps) {
     typed: string,
     // The first message of a new thread starts the thread and opens it, so the key is read before the send.
     key = openDraftKey(),
+    deliveryMode?: "queue" | "steer",
   ): Promise<boolean> {
     await importsEnded(key);
     // An import that ended put its reference in the draft after the user pressed Send.
@@ -296,6 +297,7 @@ export function createThreadComposerActions(deps: ThreadComposerActionsDeps) {
       text,
       attachments.filter((attachment) => referenced.has(attachment.id)).map((attachment) => attachment.id),
       replyToMessageId,
+      deliveryMode,
     );
     if (!sent || !key) return sent;
     const known = new Set(attachments.map((attachment) => attachment.id));

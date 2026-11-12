@@ -8,7 +8,7 @@ const TEXT_ENTRY = 'input, textarea, select, [contenteditable=""], [contentedita
  * (`body`, after a click in the transcript) or a control the pointer focused, such as a sidebar row.
  * A popup, a text selection, another text field or a keyboard-focused control is the user's choice.
  */
-export function shouldRestoreComposerFocus(editor: HTMLElement): boolean {
+export function shouldRestoreComposerFocus(editor: HTMLElement, navigation = false): boolean {
   if (!editor.isConnected || editor.getAttribute("contenteditable") !== "true") return false;
   if (editor.closest("[inert], [hidden]")) return false;
   const document = editor.ownerDocument;
@@ -18,5 +18,8 @@ export function shouldRestoreComposerFocus(editor: HTMLElement): boolean {
   const selection = document.getSelection();
   if (selection && !selection.isCollapsed && !editor.contains(selection.anchorNode)) return false;
   if (!active || active === document.body || active === document.documentElement) return true;
+  // Navigation replaces the conversation. Its previous editor may still own focus while the
+  // covered main chat is becoming inert, or while the previous task finishes unmounting.
+  if (navigation && active.matches(".composer-editor-surface") && active.closest("[inert], [hidden]")) return true;
   return !active.matches(TEXT_ENTRY) && !active.matches(":focus-visible");
 }

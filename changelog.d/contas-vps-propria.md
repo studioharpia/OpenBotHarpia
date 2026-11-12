@@ -1,0 +1,3 @@
+### Changed
+
+- Implementamos uma opção de serviço de contas em VPS própria, com SQLite persistente, armazenamento de objetos local e SMTP com TLS. Preservamos as rotas existentes e adicionamos verificação de login, convites para até dez membros e continuidade de identidade após reinício. A migração da conta existente exige publicação e validação no domínio próprio antes da troca do aplicativo. Também implementamos configuração persistente da origem no app, preservamos a identidade e a imagem do servidor na migração e corrigimos o login SMTP do Resend para permitir a entrega de códigos pelo serviço próprio.

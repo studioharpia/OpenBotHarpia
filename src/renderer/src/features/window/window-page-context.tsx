@@ -14,6 +14,7 @@ export type WindowPage =
   | "workflows"
   | "usage"
   | "library"
+  | "templates"
   | "marketplace"
   | "settings"
   | "server-settings";
@@ -173,6 +174,10 @@ const context = createSimpleContext({
       openLibrary(source: HTMLElement | null) {
         const serverId = activeServerId();
         if (serverId) usage.openLibrary(serverId, source);
+      },
+      openTemplates(source: HTMLElement | null) {
+        const serverId = activeServerId();
+        if (serverId) usage.openTemplates(serverId, source);
       },
       openSettings(source: HTMLElement | null) {
         settings.openAppSettings(source);

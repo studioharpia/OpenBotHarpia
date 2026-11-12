@@ -2,6 +2,28 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/conversation";
 
 export const messages = {
+  "conversation.threads.error.transfer": "Не удалось переместить задачу.",
+
+  "conversation.sidePanel.pane.central": "Центр агента",
+  "conversation.central.mainChat": "Основной чат",
+  "conversation.central.overview": "Обзор",
+  "conversation.central.currentMonth": "Текущий месяц",
+  "conversation.central.previousMonth": "Прошлый месяц",
+  "conversation.central.tokens": "Использовано токенов",
+  "conversation.central.finishedTasks": "Завершённые задачи",
+  "conversation.central.finishedHint":
+    "Задачи учитываются один раз, по дате первого успешного завершения. Архивные задачи включены.",
+  "conversation.central.completedTasks": "Завершённые",
+  "conversation.central.inProgressTasks": "В работе",
+  "conversation.central.emptySection": "В этом разделе нет задач.",
+  "conversation.central.statusRunning": "Выполняется",
+  "conversation.central.statusStarting": "Подключение",
+  "conversation.central.statusReady": "Доступен",
+  "conversation.central.statusUnavailable": "Недоступен",
+  "conversation.central.activity": "Активность токенов",
+  "conversation.central.archivedTasks": "В архиве",
+  "conversation.central.newTask": "Новая задача",
+  "conversation.central.taskActions": "Действия для {title}",
   "conversation.globalSearch.title": "Поиск по OpenBot",
   "conversation.globalSearch.filter": "Фильтр результатов",
   "conversation.globalSearch.tab.all": "Все",
@@ -63,6 +85,8 @@ export const messages = {
   "conversation.sidePanel.pane.browser": "Браузер",
   "conversation.sidePanel.pane.files": "Файлы",
   "conversation.threads.new": "Новая ветка",
+  "conversation.threads.showSidebar": "Показать задачи на боковой панели",
+  "conversation.threads.showTopbar": "Показать задачи на верхней панели",
   "conversation.threads.all": "Все ветки",
   "conversation.threads.open": "Открытые ветки",
   "conversation.threads.current": "Ветка: {title}",

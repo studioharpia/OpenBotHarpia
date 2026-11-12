@@ -25,6 +25,7 @@ import {
   type MobileAgent,
   type MobileServer,
   useMobileWorkspaceActions,
+  useMobileWorkspaceSelector,
 } from "@/features/workspace/context/mobile-workspace-context";
 import { queryKeys } from "@/features/workspace/model/query-keys";
 import { haptics } from "@/shared/lib/haptics";
@@ -234,6 +235,7 @@ export function AgentTaskLimitField(props: AgentHostFieldsProps) {
   const { t, format } = useText();
   const { theme } = useUniwind();
   const workspace = useMobileWorkspaceActions();
+  const maximum = useMobileWorkspaceSelector((workspace) => workspace.agentTaskLimitMax(props.agent.serverId));
   const { current, enabled, error, save } = useAgentHostRecord<AgentTaskLimitSettings, AgentTaskLimitSettings>(
     props,
     "task-limit",
@@ -259,7 +261,7 @@ export function AgentTaskLimitField(props: AgentHostFieldsProps) {
           trailing={
             <SettingsPicker<TaskLimitChoice>
               value={choice}
-              options={TASK_LIMIT_CHOICES.map((value) => ({
+              options={TASK_LIMIT_CHOICES.filter((value) => value === "default" || value <= maximum).map((value) => ({
                 value,
                 label:
                   value === "default"

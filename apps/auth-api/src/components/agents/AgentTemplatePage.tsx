@@ -2,9 +2,11 @@ import { createOpenBotAgentTemplateUrl, createWebAppAgentTemplatePath } from "@o
 import type { AgentTemplateDetail } from "@openbot/contracts/ipc";
 import { markdownPlainText, markdownPreviewText } from "@openbot/contracts/markdown-preview-text";
 import { Link } from "@tanstack/solid-router";
+import { createClientOnlyFn } from "@tanstack/solid-start";
 import { createMemo, createSignal, For, Loading, lazy, onSettled, Show } from "solid-js";
 import { agentTemplatePath } from "../../lib/agent-template-path";
 import { landingAnalytics } from "../../lib/analytics";
+import { loadClientAgentAvatar } from "../client-agent-avatar";
 import { LandingFooter } from "../landing/LandingFooter";
 import { SiteHeader } from "../landing/SiteHeader";
 import { PluginOpenButtons } from "../plugins/PluginOpenButtons";
@@ -12,16 +14,15 @@ import { PluginOpenButtons } from "../plugins/PluginOpenButtons";
 // The Bloub library, which draws the avatar and owns its colours, uses browser-only APIs as soon as
 // its module loads, so the Worker must never import it. The page loads both parts in the browser
 // after hydration.
-const AgentAvatar = lazy(() =>
-  import("@openbot/ui/features/agents/AgentAvatar").then((module) => ({ default: module.AgentAvatar })),
-);
+const AgentAvatar = lazy(loadClientAgentAvatar);
 // The instructions are Markdown. The renderer is the app's own, which builds elements from the parsed
 // text and never inserts HTML. It loads only when the reader opens the instructions.
-const MarkdownMessageText = lazy(() =>
+const loadMarkdown = createClientOnlyFn(() =>
   import("@openbot/ui/features/conversation/MarkdownMessageText").then((module) => ({
     default: module.MarkdownMessageText,
   })),
 );
+const MarkdownMessageText = lazy(loadMarkdown);
 
 export interface AgentTemplatePageProps {
   template: AgentTemplateDetail;

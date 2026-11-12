@@ -3,6 +3,7 @@ import { createSignal, For, lazy, onCleanup, onSettled, Show } from "solid-js";
 import { landingAnalytics } from "../../lib/analytics";
 import { LANDING_TEAM, type LandingTeammate } from "../../lib/landing-content";
 import { TEAMS_BENEFIT_ICONS, TEAMS_ROUTE, TEAMS_SETUP_IDS, type TeamsSetupId } from "../../lib/teams-page";
+import { loadClientAgentAvatar } from "../client-agent-avatar";
 import { createLandingReveal } from "../landing/createLandingReveal";
 import { LandingFooter } from "../landing/LandingFooter";
 import { LandingGlow } from "../landing/LandingGlow";
@@ -13,9 +14,7 @@ import { ButtonLink } from "../ui/button";
 import type { TeamsPageText } from "./teams-page-text";
 
 // Loaded after the page is in the browser, as in `FeaturesSection`: the avatar engine is large.
-const AgentAvatar = lazy(() =>
-  import("@openbot/ui/features/agents/AgentAvatar").then((module) => ({ default: module.AgentAvatar })),
-);
+const AgentAvatar = lazy(loadClientAgentAvatar);
 
 const SETUP_ICONS: Record<TeamsSetupId, LandingIconName> = {
   local: "laptop",

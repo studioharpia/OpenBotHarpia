@@ -2,6 +2,13 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "タスクIDと転送先エージェントのIDを指定してください。",
+  "error.backend.taskTransferFailed": "OpenBotはタスクを転送できませんでした。もう一度お試しください。",
+  "error.backend.taskTransferOwnChatOnly":
+    "タスクの転送は自分のチャットから行ってください。チャンネル、外部の会話、別のタスクからは転送できません。",
+  "error.backend.threadTransferBusy": "このタスクには実行中または保留中の作業があるため、まだ移動できません。",
+  "error.backend.threadTransferRoutine": "ルーチンに関連付けられたタスクは別のエージェントに移動できません。",
+
   "error.backend.eventsUnavailable": "このホストではイベントを利用できません。",
   "error.backend.databaseIntegrity": "OpenBot のデータベースが整合性チェックに失敗しました。",
   "error.backend.webhookRouteLimit": "1 つのホストの Webhook ルーティンは最大 {limit} 個です。",
@@ -393,6 +400,8 @@ export const messages = {
     "新しいスレッドで実行できるのは、このエージェントだけに送信したメッセージのみです。",
   "error.backend.taskTitleRequired": "タスクに短いタイトルを付けてください。",
   "error.backend.taskToolInvalid": "タスクには 120 文字以内のタイトルと、何をするかを説明する指示を付けてください。",
+  "error.backend.taskRenameInvalid": "タスクIDと120文字以内のタイトルを指定してください。",
+  "error.backend.taskRenameFailed": "OpenBotはタスクの名前を変更できませんでした。もう一度お試しください。",
   "error.backend.taskOwnChatOnly":
     "タスクは自分のチャットからのみ開始してください。チャンネル、メッセージングの会話、別のタスクからは開始できません。",
   "error.backend.taskUnfinishedLimit":

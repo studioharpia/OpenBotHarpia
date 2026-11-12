@@ -17,7 +17,11 @@ import { agentActivityExitDelay, agentActivityExitDuration } from "@openbot/ui/f
 import { UsageLimitAskCard } from "@openbot/ui/features/conversation/BackupModels";
 import { branchPointIds } from "@openbot/ui/features/conversation/branch-points";
 import { ChatActionMarker } from "@openbot/ui/features/conversation/ChatActionMarker";
-import { type ChatMessageAuthor, ChatMessageRow } from "@openbot/ui/features/conversation/ChatMessageRow";
+import {
+  type ChatMessageAuthor,
+  ChatMessageRow,
+  messageRowCreatedAt,
+} from "@openbot/ui/features/conversation/ChatMessageRow";
 import { ChatRowBoundary } from "@openbot/ui/features/conversation/ChatRowBoundary";
 import { ChatScrollRail, createChatScrollRail } from "@openbot/ui/features/conversation/ChatScrollRail";
 import { ChatSearch } from "@openbot/ui/features/conversation/ChatSearch";
@@ -43,6 +47,7 @@ import { UnreadMessagesBanner, UnreadMessagesDivider } from "@openbot/ui/feature
 import { VoicePlayer } from "@openbot/ui/features/conversation/VoicePlayer";
 import { teamMemberName } from "@openbot/ui/features/team/TeamPersonAvatar";
 import { useText } from "@openbot/ui/text";
+import type { VirtualItem } from "@tanstack/virtual-core";
 import { createEffect, createMemo, createSignal, For, Loading, lazy, onCleanup, Show, untrack } from "solid-js";
 import { useShowAgentSteps } from "../../agent-steps-preference";
 import { planItems, planTitle } from "../../app-message-projection";
@@ -171,6 +176,8 @@ export function ConversationTimeline() {
     messageVirtualizer,
     newMessageCount,
     timelineMessages,
+    timelineMediaRows,
+    timelineMessageIndexById,
     toggleRoutineRun,
     toggleAgentMessage,
     timelineIndexById,
@@ -182,6 +189,7 @@ export function ConversationTimeline() {
     openSkillSettings,
     openInstructionsSettings,
     openSharedFile,
+    revealChatFile,
     openWorkspaceFile,
     openQuote,
     openTaggedReference,
@@ -592,7 +600,7 @@ export function ConversationTimeline() {
   const virtualMessageRows = createMemo(() => messageVirtualizer.getVirtualItems());
   let timelineScrollElement: HTMLDivElement | undefined;
   const subagentDock = createSubagentDock({
-    rows: timelineMessages,
+    rows: () => timelineMediaRows().flatMap((row) => row.messages[0] ?? []),
     drawnRows: virtualMessageRows,
     scrollElement: () => timelineScrollElement,
     hidden: sideThreadOpen,
@@ -610,7 +618,7 @@ export function ConversationTimeline() {
     header?.focus({ preventScroll: true });
   };
   const rail = createChatScrollRail({
-    rows: timelineMessages,
+    rows: () => timelineMediaRows().flatMap((row) => row.messages[0] ?? []),
     // A change the person made in the app, such as to a routine, is a marker, not a message they wrote.
     // In a shared chat, a message from another member is theirs.
     question: (message) =>
@@ -722,6 +730,886 @@ export function ConversationTimeline() {
   // A skill of the agent's own: every agent has the managed OpenBot skills.
   const sampleSkillName = () =>
     installedSkills().find((skill) => skill.enabled !== false && skill.origin !== "managed")?.name;
+  function MediaRunHeader(headerProps: { messageId: string }) {
+    const message = () => timelineMessages()[timelineMessageIndexById().get(headerProps.messageId) ?? -1];
+    const label = () => {
+      const current = message();
+      const index = timelineMessageIndexById().get(headerProps.messageId);
+      if (!current || index === undefined) return null;
+      const previous = timelineMessages()[index - 1];
+      const at = messageRowCreatedAt(current);
+      return at
+        ? dayMarkerLabel(messageRowCreatedAt(previous), at, {
+            t,
+            format,
+            ...(channel || !compactActions() ? {} : { gapMs: AGENT_CHAT_TIME_GAP_MS }),
+          })
+        : previous === undefined
+          ? current.time
+          : null;
+    };
+    return (
+      <>
+        <Show when={headerProps.messageId === compactionBefore()}>
+          <CompactionMarker />
+        </Show>
+        <Show when={label()}>
+          {(day) => (
+            <div class="time-marker">
+              <span>{day()}</span>
+            </div>
+          )}
+        </Show>
+        <Show when={headerProps.messageId === unreadBoundaryMessageId()}>
+          <UnreadMessagesDivider
+            animateIn={unreadDividerArrives}
+            elementRef={(element) => {
+              setUnreadMessagesDividerElement(element);
+              scheduleUnreadDividerVisibilityUpdate();
+            }}
+          />
+        </Show>
+        <Show when={!channel && showAgentSteps() && turnSteps.stepsAbove(headerProps.messageId)}>
+          {(steps) => (
+            <ChatRowBoundary>
+              <AgentStepsDisclosure
+                steps={steps()}
+                defaultOpen={showAgentSteps()}
+                list
+                trace={traceAbove(headerProps.messageId)}
+                facts={turnSteps.factsAbove(headerProps.messageId)}
+              />
+            </ChatRowBoundary>
+          )}
+        </Show>
+      </>
+    );
+  }
+
+  function TimelineMessageRow(rowProps: { row: VirtualItem; messageId: string; embedded?: boolean }) {
+    // The row's own message, found by id: `rowProps.row.index` can be stale for a tick.
+    const index = createMemo(() => timelineMessageIndexById().get(rowProps.messageId));
+    const message = createMemo(() => {
+      const current = index();
+      return current === undefined ? undefined : timelineMessages()[current];
+    });
+    const previousMessage = () => {
+      const current = index();
+      return current === undefined ? undefined : timelineMessages()[current - 1];
+    };
+    const initialMessage = untrack(message);
+    if (!initialMessage) return null;
+    const arrives = untrack(() => initialMessage.animate === true && markMessageSeen(initialMessage.id));
+    const initialActionMarker = untrack(() => initialMessage.actionMarker);
+    // Each state of a routine run is a new message, so the run's row is drawn again for
+    // each one. The run enters once, the first time a row of it is drawn; each new state
+    // is still announced.
+    const animateEntrance =
+      initialActionMarker?.kind === "routine-run"
+        ? untrack(() => markMessageSeen(`routine-run:${initialActionMarker.runId}`)) && arrives
+        : arrives;
+    /*
+     * The separator above the row. The first row always carries one, and a later row
+     * carries one when it opens a new day. The agent chat shows no time under a message,
+     * so a pause of an hour or more also gets one there. A message with no stored timestamp can only
+     * open the transcript, so it falls back to the time it prints in its footer.
+     */
+    const dayMarker = createMemo(() => {
+      const current = message();
+      if (!current) return null;
+      const previous = previousMessage();
+      const at = messageRowCreatedAt(current);
+      if (at)
+        return dayMarkerLabel(messageRowCreatedAt(previous), at, {
+          t,
+          format,
+          ...(channel || !compactActions() ? {} : { gapMs: AGENT_CHAT_TIME_GAP_MS }),
+        });
+      return previous === undefined ? (current.time ?? t("chat.day.now")) : null;
+    });
+    /*
+     * A row that continues a run by the same sender draws no time: the run carries one
+     * time at its top, and a header on every row leaves an empty line between them. A
+     * row that draws a marker of its own opens a run, because the marker stands between
+     * it and the message above it.
+     */
+    const continuesRun = createMemo(() => {
+      const current = message();
+      if (!current) return false;
+      if (current.id === unreadBoundaryMessageId() || current.actionMarker) return false;
+      const previous = previousMessage();
+      return continuesSenderRun(previous && senderRunRow(previous), senderRunRow(current), {
+        previousDrawsTime: previous !== undefined && rowDrawsTime(previous),
+        startsDay: dayMarker() !== null,
+      });
+    });
+    const author = createMemo((): ChatMessageAuthor => {
+      const current = message();
+      const sender = otherSender(current);
+      if (sender) return memberAuthor(sender);
+      if (current?.author === "you") return { kind: "you", name: t("chat.message.you"), chatColor: ownChatColor() };
+      if (channel && current) return channel.author(current);
+      // The profile gives the row the agent's color, for the name and the bubble tint.
+      return {
+        kind: "agent",
+        name: props.agent?.name ?? t("chat.message.agentFallback"),
+        agent: props.agent,
+      };
+    });
+    const referencedMessage = createMemo(() => {
+      const replyToMessageId = message()?.replyToMessageId;
+      if (!replyToMessageId) return undefined;
+      return (
+        timelineMessages().find((candidate) => candidate.id === replyToMessageId) ??
+        props.messageReferences?.[replyToMessageId]
+      );
+    });
+    const openReference = () => {
+      const current = message();
+      if (current) void replyJump.openReference(current);
+    };
+    // A quote of another person's message names them; any other quote keeps its label.
+    const referencedAuthorName = () => {
+      const referenced = referencedMessage();
+      const sender = otherSender(referenced);
+      if (sender) return memberAuthor(sender).name;
+      return channel && referenced?.author === "agent" ? channel.author(referenced).name : undefined;
+    };
+    // A workspace path is in the workspace of the agent that wrote it. A person's message in
+    // a channel names no agent, so its paths stay text.
+    const workspaceAgentId = () => {
+      if (!channel) return props.agent?.id;
+      const current = message();
+      return current?.author === "agent" ? current.senderAgentId : undefined;
+    };
+    // A bare file name can be a file that the same turn attached, from a subfolder or a tool
+    // that reports no path. It opens when the workspace has no such file (#5189).
+    const turnAttachment = (path: string) => {
+      const turnId = message()?.turnId;
+      if (!turnId || /[/\\]/u.test(path)) return undefined;
+      const matches = timelineMessages()
+        .filter((candidate) => candidate.turnId === turnId)
+        .flatMap((candidate) => candidate.attachments ?? [])
+        .filter((attachment) => attachment.name === path);
+      return matches.length === 1 ? matches[0] : undefined;
+    };
+    const imageScope = () => ({
+      serverId: props.server?.id ?? "local",
+      messageId: message()?.id ?? initialMessage.id,
+      agentId: workspaceAgentId(),
+    });
+    // A chip joins a file name to the folder that the message names. When nothing is there,
+    // the name opens as the agent wrote it, from its workspace (#5270).
+    const writtenFile = (asWritten: string | undefined) => {
+      const agentId = workspaceAgentId();
+      return asWritten && agentId
+        ? () => openWorkspaceFile(asWritten, undefined, agentId, "tab", turnAttachment(asWritten))
+        : undefined;
+    };
+    // A row the host has not drawn yet has no reactions, replies or menu: its id is not the
+    // host's, even after the host answered.
+    const hostless = createMemo(() => message()?.id.startsWith(PENDING_SEND_ID_PREFIX) === true);
+    // The text before a waiting question is a step of the turn (#4897). A step keeps no
+    // reaction, reply or menu, and the row goes back into the steps after the answer.
+    const turnStep = createMemo(() => message()?.itemType === "commentary");
+    const pendingSend = createMemo(() => {
+      const send = pendingSendFor(message()?.id);
+      return send && send.state !== "sent" ? send : undefined;
+    });
+    // The status line stays one element while its state changes, so its live region speaks.
+    const pending = createMemo(() => pendingSend() !== undefined);
+    // Only the kind rebuilds the player, so its controls keep focus when it starts or stops.
+    const player = createMemo(() => voicePlayer(message()));
+    const playerKind = createMemo(() => player()?.kind);
+    // Only a reply has a speed: the user's own recording plays at normal speed.
+    const replySpeed = () => (playerKind() === "reply" ? speechSpeed() : undefined);
+    const replySpeedChange = () => (playerKind() === "reply" ? cycleSpeechSpeed : undefined);
+    const pendingState = () => {
+      const state = pendingSend()?.state;
+      return state === "failed" || state === "waiting" ? state : "sending";
+    };
+    const pendingRetrySafe = () => {
+      const send = pendingSend();
+      return send ? pendingSendRetrySafe(send) : false;
+    };
+    const markerOnly = untrack(() => markerOnlyMessage(initialMessage));
+    // Consecutive markers keep the tighter marker gap so they read as one group.
+    const groupedWithMarker = createMemo(() => {
+      const current = message();
+      if (!current?.actionMarker) return false;
+      if (current.id === unreadBoundaryMessageId()) return false;
+      const previous = previousMessage();
+      return previous !== undefined && markerRowEndsWithMarker(previous);
+    });
+    if (markerOnly) {
+      return (
+        <div
+          data-index={rowProps.embedded ? undefined : rowProps.row.index}
+          data-grouped={groupedWithMarker() ? "marker" : undefined}
+          ref={(element) => {
+            if (!rowProps.embedded) messageVirtualizer.measureElement(element);
+          }}
+          class={rowProps.embedded ? "message-media-cell" : "virtual-chat-row"}
+          style={{
+            transform:
+              !rowProps.embedded && messageVirtualizer.isVirtualized()
+                ? `translateY(${rowProps.row.start - messageVirtualizer.scrollMargin()}px)`
+                : "none",
+          }}
+        >
+          <Show when={message()?.id === compactionBefore()}>
+            <CompactionMarker />
+          </Show>
+          <Show when={dayMarker()}>
+            {(label) => (
+              <div class="time-marker">
+                <span>{label()}</span>
+              </div>
+            )}
+          </Show>
+          <Show when={message()?.id === unreadBoundaryMessageId()}>
+            <UnreadMessagesDivider
+              animateIn={unreadDividerArrives}
+              elementRef={(element) => {
+                setUnreadMessagesDividerElement(element);
+                scheduleUnreadDividerVisibilityUpdate();
+              }}
+            />
+          </Show>
+          <ChatRowBoundary>
+            <article
+              data-chat-search-message={message()?.id}
+              data-chat-search-group={groupedMessageIds(message())}
+              class={{ "chat-action-entry-animated": animateEntrance }}
+            >
+              <Show when={message()?.actionMarker ?? initialActionMarker}>
+                {(marker) => (
+                  <Show
+                    when={routineCard(message() ?? initialMessage, marker())}
+                    fallback={
+                      <Show
+                        when={suggestionMarker(marker())}
+                        fallback={
+                          <Show
+                            when={mcpSignInConfig(marker())}
+                            fallback={
+                              <Show
+                                when={webhookRoutineCard(message() ?? initialMessage, marker())}
+                                fallback={
+                                  <ChatActionMarker
+                                    onOpenSkill={
+                                      agentSkillsMode(props.server, props.runtime) === "hidden"
+                                        ? undefined
+                                        : openSkillSettings
+                                    }
+                                    marker={marker()}
+                                    agents={props.agents}
+                                    announce={arrives}
+                                    routineAvailable={routineMarkerAvailable(marker(), availableRoutineIds())}
+                                    onSelectAgent={props.onSelectAgent}
+                                    onOpenRoutine={openRoutineSettings}
+                                    openRoutineThread={openRoutineThread}
+                                    onOpenHostedSite={(url) => void openExternalMessageUrl(url)}
+                                    onOpenLink={(url) => void openExternalMessageUrl(url)}
+                                    onToggleRoutineRun={toggleRoutineRun}
+                                    onToggleAgentMessage={toggleAgentMessage}
+                                    agentMessageText={agentMessageText}
+                                    instructions={localInstructionsCalls()}
+                                    onOpenInstructions={
+                                      channel || !localInstructionsCalls() ? undefined : openInstructionsSettings
+                                    }
+                                  />
+                                }
+                              >
+                                {(card) => (
+                                  <RoutineWebhookChatCard
+                                    api={card().api}
+                                    action={card().action}
+                                    routine={card().routine}
+                                    connected={webhookRoutines.state.connected}
+                                    secret={webhookRoutines.state.secrets[card().routine.id] ?? null}
+                                    onSecret={(secret) => webhookRoutines.setSecret(card().routine.id, secret)}
+                                    onOpenRoutine={openRoutineSettings}
+                                  />
+                                )}
+                              </Show>
+                            }
+                          >
+                            {(config) => (
+                              <McpSignInChatCard
+                                config={config()}
+                                signedIn={props.mcpSignedIn?.(config().id) ?? false}
+                                onSignIn={
+                                  props.onOpenMcpSignIn
+                                    ? (trigger) => props.onOpenMcpSignIn?.(config().id, trigger)
+                                    : undefined
+                                }
+                                onContinue={sendCardMessage}
+                              />
+                            )}
+                          </Show>
+                        }
+                      >
+                        {(suggestion) => (
+                          <MarketplaceSuggestionChatCard
+                            messageId={message()?.id ?? initialMessage.id}
+                            appId={suggestion().appId}
+                            connectors={props.connectors}
+                            mcpServers={mcpServers()}
+                            onOpenMarketplaceApp={props.onOpenMarketplaceApp}
+                          />
+                        )}
+                      </Show>
+                    }
+                  >
+                    {(card) => (
+                      <RoutineChatCard
+                        action={card().action}
+                        routine={card().routine}
+                        agentId={card().agentId}
+                        onOpenRoutine={openRoutineSettings}
+                      />
+                    )}
+                  </Show>
+                )}
+              </Show>
+              <Show
+                when={initialMessage.exchange?.direction === "incoming" && (message()?.attachments?.length ?? 0) > 0}
+              >
+                <div class="chat-action-attachments">
+                  <AttachmentCards
+                    attachments={message()?.attachments ?? []}
+                    mediaSource={runtime.attachmentMedia}
+                    downloads={attachmentDownloads}
+                    onPreview={(attachment) => void previewAttachment(attachment)}
+                    onAction={attachmentAction}
+                  />
+                </div>
+              </Show>
+            </article>
+          </ChatRowBoundary>
+        </div>
+      );
+    }
+    if (untrack(() => initialMessage.kind === "plan")) {
+      // A plan has no bubble, reactions or time: it is the agent's live checklist.
+      const plan = () => message()?.plan ?? initialMessage.plan;
+      return (
+        <div
+          data-index={rowProps.embedded ? undefined : rowProps.row.index}
+          ref={(element) => {
+            if (!rowProps.embedded) messageVirtualizer.measureElement(element);
+          }}
+          class={rowProps.embedded ? "message-media-cell" : "virtual-chat-row"}
+          style={{
+            transform:
+              !rowProps.embedded && messageVirtualizer.isVirtualized()
+                ? `translateY(${rowProps.row.start - messageVirtualizer.scrollMargin()}px)`
+                : "none",
+          }}
+        >
+          <Show when={message()?.id === compactionBefore()}>
+            <CompactionMarker />
+          </Show>
+          <Show when={dayMarker()}>
+            {(label) => (
+              <div class="time-marker">
+                <span>{label()}</span>
+              </div>
+            )}
+          </Show>
+          <Show when={message()?.id === unreadBoundaryMessageId()}>
+            <UnreadMessagesDivider
+              animateIn={unreadDividerArrives}
+              elementRef={(element) => {
+                setUnreadMessagesDividerElement(element);
+                scheduleUnreadDividerVisibilityUpdate();
+              }}
+            />
+          </Show>
+          <ChatRowBoundary>
+            <article data-chat-search-message={message()?.id} class={{ "message-entry-animated": animateEntrance }}>
+              <Show when={plan()}>
+                {(current) => (
+                  <TaskList
+                    items={planItems(current(), message()?.streaming === true)}
+                    title={planTitle(current())}
+                    defaultOpen={untrack(() => initialMessage.streaming === true)}
+                  />
+                )}
+              </Show>
+            </article>
+          </ChatRowBoundary>
+        </div>
+      );
+    }
+    if (untrack(() => initialMessage.kind === "subagents")) {
+      // The subagents have no bubble, reactions or time: they are the live work of the turn.
+      const subagents = () => message()?.subagents ?? initialMessage.subagents;
+      return (
+        <div
+          data-index={rowProps.embedded ? undefined : rowProps.row.index}
+          ref={(element) => {
+            if (!rowProps.embedded) messageVirtualizer.measureElement(element);
+          }}
+          class={rowProps.embedded ? "message-media-cell" : "virtual-chat-row"}
+          style={{
+            transform:
+              !rowProps.embedded && messageVirtualizer.isVirtualized()
+                ? `translateY(${rowProps.row.start - messageVirtualizer.scrollMargin()}px)`
+                : "none",
+          }}
+        >
+          <Show when={message()?.id === compactionBefore()}>
+            <CompactionMarker />
+          </Show>
+          <Show when={dayMarker()}>
+            {(label) => (
+              <div class="time-marker">
+                <span>{label()}</span>
+              </div>
+            )}
+          </Show>
+          <Show when={message()?.id === unreadBoundaryMessageId()}>
+            <UnreadMessagesDivider
+              animateIn={unreadDividerArrives}
+              elementRef={(element) => {
+                setUnreadMessagesDividerElement(element);
+                scheduleUnreadDividerVisibilityUpdate();
+              }}
+            />
+          </Show>
+          <ChatRowBoundary>
+            <article data-chat-search-message={message()?.id} class={{ "message-entry-animated": animateEntrance }}>
+              <Show when={subagents()}>
+                {(current) => (
+                  <SubagentGroup subagents={current()} selectedId={shownSubagentId()} onOpen={toggleSubagentPanel} />
+                )}
+              </Show>
+            </article>
+          </ChatRowBoundary>
+        </div>
+      );
+    }
+    if (untrack(() => initialMessage.kind === "memory-changes" || initialMessage.kind === "thinking")) {
+      // Only a finished turn with no answer gets this row: an answer shows the steps above it.
+      return (
+        <div
+          data-index={rowProps.embedded ? undefined : rowProps.row.index}
+          ref={(element) => {
+            if (!rowProps.embedded) messageVirtualizer.measureElement(element);
+          }}
+          class={rowProps.embedded ? "message-media-cell" : "virtual-chat-row"}
+          style={{
+            transform:
+              !rowProps.embedded && messageVirtualizer.isVirtualized()
+                ? `translateY(${rowProps.row.start - messageVirtualizer.scrollMargin()}px)`
+                : "none",
+          }}
+        >
+          <Show when={message()?.id === unreadBoundaryMessageId()}>
+            <UnreadMessagesDivider
+              animateIn={unreadDividerArrives}
+              elementRef={(element) => {
+                setUnreadMessagesDividerElement(element);
+                scheduleUnreadDividerVisibilityUpdate();
+              }}
+            />
+          </Show>
+          <ChatRowBoundary>
+            <article data-chat-search-message={message()?.id}>
+              <AgentStepsDisclosure
+                steps={turnSteps.stepsOfTurn((message() ?? initialMessage).turnId)}
+                defaultOpen={showAgentSteps()}
+              />
+            </article>
+          </ChatRowBoundary>
+        </div>
+      );
+    }
+    const initialVisual = untrack(() => chatVisualReply(initialMessage));
+    // The desktop loads the page from its own scheme. The web client has no page URL: it
+    // reads the HTML and shows it as `srcdoc`. Another client shows the title and file.
+    const loadPage = runtime.visualPage;
+    if (initialVisual && (chatVisualPageUrl(initialVisual.attachment.previewUrl) || loadPage)) {
+      // A visual reply is the agent's page. It shows above the final reply, with no bubble.
+      const visual = () => chatVisualReply(message() ?? initialMessage) ?? initialVisual;
+      const pageUrl = () => chatVisualPageUrl(visual().attachment.previewUrl);
+      // The page quotes as its file, as in the side panel, so the quote chip opens the page.
+      const pageQuoteId = () =>
+        fileQuoteId({
+          source: "attachment",
+          attachmentId: visual().attachment.id,
+          name: visual().attachment.name,
+        });
+      const [page, setPage] = createSignal<{ html?: string; failed?: boolean }>({});
+      if (loadPage && !pageUrl()) {
+        let mounted = true;
+        onCleanup(() => {
+          mounted = false;
+        });
+        void loadPage(initialVisual.attachment).then(
+          (html) => {
+            if (mounted) setPage({ html });
+          },
+          () => {
+            if (mounted) setPage({ failed: true });
+          },
+        );
+      }
+      return (
+        <div
+          data-index={rowProps.embedded ? undefined : rowProps.row.index}
+          ref={(element) => {
+            if (!rowProps.embedded) messageVirtualizer.measureElement(element);
+          }}
+          class={rowProps.embedded ? "message-media-cell" : "virtual-chat-row"}
+          style={{
+            transform:
+              !rowProps.embedded && messageVirtualizer.isVirtualized()
+                ? `translateY(${rowProps.row.start - messageVirtualizer.scrollMargin()}px)`
+                : "none",
+          }}
+        >
+          <Show when={message()?.id === compactionBefore()}>
+            <CompactionMarker />
+          </Show>
+          <Show when={dayMarker()}>
+            {(label) => (
+              <div class="time-marker">
+                <span>{label()}</span>
+              </div>
+            )}
+          </Show>
+          <Show when={message()?.id === unreadBoundaryMessageId()}>
+            <UnreadMessagesDivider
+              animateIn={unreadDividerArrives}
+              elementRef={(element) => {
+                setUnreadMessagesDividerElement(element);
+                scheduleUnreadDividerVisibilityUpdate();
+              }}
+            />
+          </Show>
+          <ChatRowBoundary>
+            <article
+              data-chat-search-message={message()?.id}
+              aria-label={(message() ?? initialMessage).body}
+              class={{ "message-entry-animated": animateEntrance }}
+            >
+              <ChatVisual
+                src={pageUrl()}
+                html={page().html}
+                failed={pageUrl() === undefined && (!loadPage || page().failed === true)}
+                title={(message() ?? initialMessage).body}
+                height={visual().height}
+                onOpenLink={(url) => void openExternalMessageUrl(url)}
+                onMessage={addPageText}
+                onContext={(text) => setPageContext(message() ?? initialMessage, text)}
+                onQuote={(text) => quoteSelection(pageQuoteId(), text)}
+                quoteShortcut={deviceQuoteShortcut(props.platform)}
+                onOpenInSidePanel={() => void previewAttachment(visual().attachment)}
+                isAppShortcut={isChatVisualAppShortcut}
+                macWindowControls={props.platform === "darwin"}
+              />
+            </article>
+          </ChatRowBoundary>
+        </div>
+      );
+    }
+    const displayedReactions = createMemo(() => {
+      const currentMessage = message();
+      if (currentMessage?.reactions?.length) return currentMessage.reactions;
+      if (currentMessage?.reaction) {
+        return [{ emoji: currentMessage.reaction, actor: { kind: "user" as const } }];
+      }
+      return (currentMessage?.reactionSummary?.emojis ?? []).map((emoji) => ({
+        emoji,
+        actor: { kind: "user" as const },
+      }));
+    });
+    // The action row and the right-click menu run the same actions.
+    const messageActions = {
+      onReact: (emoji: MessageReaction | null) => {
+        const currentMessage = message();
+        if (currentMessage) void reactToMessage(currentMessage, emoji);
+      },
+      onReply: () => {
+        const currentMessage = message();
+        if (currentMessage) replyToMessage(currentMessage);
+      },
+      onCopy: () => {
+        const currentMessage = message();
+        if (currentMessage) void copyMessage(currentMessage);
+      },
+    };
+    // An agent's actions stand beside its answer, and its steps show with them and open only the
+    // trace. In an agent chat, "Show agent steps" keeps the open list above the answer.
+    const stepsInRow = () =>
+      author().kind === "agent" && !message()?.questionPrompt && (Boolean(channel) || !showAgentSteps());
+    // The reader's own actions stand beside the bubble, so a run of their messages sits close.
+    const actionsBeside = () => stepsInRow() || author().kind === "you";
+    const stepsDisclosure = () => (
+      <Show when={turnSteps.stepsAbove(message()?.id)}>
+        {(steps) => (
+          <AgentStepsDisclosure
+            steps={steps()}
+            defaultOpen={showAgentSteps()}
+            list={!stepsInRow()}
+            trace={traceAbove(message()?.id, channel && author().kind === "agent" ? author().name : undefined)}
+            facts={turnSteps.factsAbove(message()?.id)}
+          />
+        )}
+      </Show>
+    );
+    const messageReadAloud = () =>
+      spokenReplyIds().has((message() ?? initialMessage).id) ? undefined : readAloudAction(message() ?? initialMessage);
+    // The right-click menu and the More button of the action row show the same items.
+    const menuItems = (): MessageMenuItemsProps => ({
+      message: message() ?? initialMessage,
+      reactions: !channel,
+      ...messageActions,
+      readAloud: messageReadAloud(),
+      onMarkUnread: markUnreadAction(message() ?? initialMessage),
+      sendToChannel: sendToChannelAction(message() ?? initialMessage),
+      onBranch: branchAction(message() ?? initialMessage),
+      branchDisabled: Boolean(props.activeTurnId),
+      onDelete: deleteAction(message() ?? initialMessage),
+    });
+    /*
+     * With "Compact message actions" on, the row shows React, Reply and More. With it off, the row
+     * shows every action and the time, as before. Named functions keep the conditions out of the
+     * component props.
+     */
+    const rowMenu = () => (compactActions() ? () => <MessageMenuItems {...menuItems()} /> : undefined);
+    const rowCopy = () => (compactActions() ? undefined : messageActions.onCopy);
+    const rowCopied = () => !compactActions() && copiedMessageId() === message()?.id;
+    const rowReadAloud = () => (compactActions() ? undefined : messageReadAloud());
+    const rowBranch = () => (compactActions() ? undefined : branchAction(message() ?? initialMessage));
+    const rowActionTime = () => Boolean(channel) || !compactActions();
+    return (
+      <div
+        data-index={rowProps.embedded ? undefined : rowProps.row.index}
+        data-grouped={groupedWithMarker() ? "marker" : continuesRun() ? "sender" : undefined}
+        ref={(element) => {
+          if (!rowProps.embedded) messageVirtualizer.measureElement(element);
+        }}
+        class={rowProps.embedded ? "message-media-cell" : "virtual-chat-row"}
+        style={{
+          transform:
+            !rowProps.embedded && messageVirtualizer.isVirtualized()
+              ? `translateY(${rowProps.row.start - messageVirtualizer.scrollMargin()}px)`
+              : "none",
+        }}
+      >
+        <Show when={!rowProps.embedded}>
+          <Show when={message()?.id === compactionBefore()}>
+            <CompactionMarker />
+          </Show>
+          <Show when={dayMarker()}>
+            {(label) => (
+              <div class="time-marker">
+                <span>{label()}</span>
+              </div>
+            )}
+          </Show>
+          <Show when={message()?.id === unreadBoundaryMessageId()}>
+            <UnreadMessagesDivider
+              animateIn={unreadDividerArrives}
+              elementRef={(element) => {
+                setUnreadMessagesDividerElement(element);
+                scheduleUnreadDividerVisibilityUpdate();
+              }}
+            />
+          </Show>
+          <Show when={!stepsInRow() && turnSteps.stepsAbove(message()?.id)}>
+            <ChatRowBoundary>{stepsDisclosure()}</ChatRowBoundary>
+          </Show>
+        </Show>
+        <ChatRowBoundary>
+          <Show
+            when={message()?.questionPrompt}
+            keyed
+            fallback={
+              <ChatMessageRow
+                message={message() ?? initialMessage}
+                author={author()}
+                showFull={chatSearchOpen() && chatSearchOpensMessage(message()?.body ?? "", chatSearchQuery())}
+                open={quotedMessageId() === message()?.id && chatSearchCanOpen(message()?.body ?? "")}
+                showAuthor={
+                  author().kind === "member" || (channel && author().kind === "agent") ? !continuesRun() : undefined
+                }
+                showTime={!continuesRun()}
+                actionRow={!turnStep()}
+                actionTime={rowActionTime()}
+                timeBeside={!channel}
+                steps={stepsInRow() ? stepsDisclosure() : undefined}
+                actionsBeside={actionsBeside()}
+                animate={animateEntrance}
+                // Natural shows a message once it is complete, in an agent chat and in a channel.
+                // Its bubble enters with all of its text, so the height does not grow while the
+                // words fade in, and a complete answer does not look as if it still arrives.
+                textAtOnce={props.responseStyle === "natural"}
+                agents={props.agents}
+                skills={installedSkills()}
+                referencedMessage={referencedMessage()}
+                referencedAuthorName={referencedAuthorName()}
+                onOpenReference={openReference}
+                referenceState={replyJump.referenceState(message(), referencedMessage())}
+                reactions={channel ? undefined : displayedReactions()}
+                reactionOverflowCount={message()?.reactionSummary?.overflowCount}
+                onRemoveReaction={() => {
+                  const currentMessage = message();
+                  if (currentMessage) void reactToMessage(currentMessage, null);
+                }}
+                data-chat-search-message={message()?.id}
+                onSelectAgent={props.onSelectAgent}
+                onOpenLink={(url) => void openExternalMessageUrl(url)}
+                onPreview={(attachment) => void previewAttachment(attachment)}
+                onAttachmentAction={attachmentAction}
+                onRevealLocalFile={
+                  !props.runtime && (props.server?.id ?? "local") === "local"
+                    ? (path, kind) => revealChatFile(path, kind, workspaceAgentId())
+                    : undefined
+                }
+                onOpenSharedFile={(path, asWritten) => openSharedFile(path, "tab", writtenFile(asWritten))}
+                onOpenWorkspaceFile={
+                  workspaceAgentId()
+                    ? (path, asWritten) =>
+                        openWorkspaceFile(
+                          path,
+                          undefined,
+                          workspaceAgentId(),
+                          "tab",
+                          turnAttachment(path),
+                          writtenFile(asWritten),
+                        )
+                    : undefined
+                }
+                onOpenQuote={openQuote}
+                onOpenTag={openTaggedReference}
+                onDownload={(attachment) => attachmentAction(attachment, "download")}
+                mediaSource={runtime.attachmentMedia}
+                downloads={attachmentDownloads}
+                macWindowControls={props.platform === "darwin"}
+                loadImageFile={messageImageFiles && ((file) => messageImageFiles.load(file, imageScope()))}
+                onDownloadImageFile={
+                  messageImageFiles &&
+                  ((file) => downloadMessageImageFile(messageImageFiles.source(file, imageScope()), workspaceAgentId()))
+                }
+                actions={
+                  <>
+                    <Show when={pending()}>
+                      <PendingSendStatus
+                        state={pendingState()}
+                        updateRequired={Boolean(providerUpdateRequired())}
+                        error={pendingSend()?.error ?? null}
+                        retrySafe={pendingRetrySafe()}
+                        canEdit={!composerHasContent() && !editingDeliveryId()}
+                        onRetry={() => {
+                          const send = pendingSend();
+                          if (send) retryPendingSend(send.clientMessageId);
+                        }}
+                        onEdit={() => {
+                          const send = pendingSend();
+                          if (send) editPendingSend(send.clientMessageId);
+                        }}
+                        onDismiss={() => {
+                          const send = pendingSend();
+                          if (send) dismissPendingSend(send.clientMessageId);
+                        }}
+                      />
+                    </Show>
+                    <Show when={!hostless() && !turnStep()}>
+                      <MessageActions
+                        message={message() ?? initialMessage}
+                        pickerOpen={openReactionMessageId() === message()?.id}
+                        expandedEmoji={expandedEmojiMessageId() === message()?.id}
+                        reactions={!channel}
+                        authorName={channel ? author().name : undefined}
+                        onTogglePicker={() => {
+                          const messageId = message()?.id;
+                          if (!messageId) return;
+                          setOpenReactionMessageId((current) => (current === messageId ? null : messageId));
+                          setExpandedEmojiMessageId(null);
+                        }}
+                        onExpandEmoji={() => {
+                          const messageId = message()?.id;
+                          if (!messageId) return;
+                          setExpandedEmojiMessageId((current) => (current === messageId ? null : messageId));
+                        }}
+                        onReact={messageActions.onReact}
+                        onReply={messageActions.onReply}
+                        menu={rowMenu()}
+                        onCopy={rowCopy()}
+                        copied={rowCopied()}
+                        readAloud={rowReadAloud()}
+                        onBranch={rowBranch()}
+                        branchDisabled={Boolean(props.activeTurnId)}
+                      />
+                    </Show>
+                  </>
+                }
+                menu={
+                  hostless() || turnStep()
+                    ? undefined
+                    : () => <MessageMenu {...menuItems()} authorName={channel ? author().name : undefined} />
+                }
+              >
+                <Show when={playerKind()}>
+                  {(kind) => (
+                    <VoicePlayer
+                      kind={kind()}
+                      state={player()?.state ?? "idle"}
+                      peaks={player()?.peaks}
+                      duration={player()?.duration}
+                      elapsed={player()?.elapsed}
+                      levels={player()?.levels}
+                      onToggle={() => player()?.onToggle()}
+                      onSeek={(seconds) => player()?.onSeek?.(seconds)}
+                      speed={replySpeed()}
+                      onCycleSpeed={replySpeedChange()}
+                    />
+                  )}
+                </Show>
+              </ChatMessageRow>
+            }
+          >
+            {(questionPrompt) => (
+              <Show
+                when={frozenUiBlock(message())}
+                fallback={
+                  <Show when={questionPrompt.resolution} keyed>
+                    {(resolution) => (
+                      <article data-chat-search-message={message()?.id} class="question-prompt-history-entry">
+                        <QuestionPromptBubble
+                          questions={questionPrompt.questions}
+                          resolution={resolution}
+                          onSubmit={async () => false}
+                          onOpenLink={(url) => void openExternalMessageUrl(url)}
+                        />
+                      </article>
+                    )}
+                  </Show>
+                }
+              >
+                {(block) => (
+                  <article data-chat-search-message={message()?.id} class="question-prompt-history-entry">
+                    <UiBlockPrompt
+                      block={block()}
+                      agents={props.agents}
+                      onSelectAgent={props.onSelectAgent}
+                      onOpenLink={(url) => void openExternalMessageUrl(url)}
+                    />
+                  </article>
+                )}
+              </Show>
+            )}
+          </Show>
+        </ChatRowBoundary>
+      </div>
+    );
+  }
+
   return (
     <>
       <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">
@@ -824,840 +1712,36 @@ export function ConversationTimeline() {
           >
             <For each={virtualMessageRows()}>
               {(virtualRow) => {
-                // The row's own message, found by id: `virtualRow.index` can be stale for a tick.
-                const index = createMemo(() => timelineIndexById().get(virtualRow.key));
-                const message = createMemo(() => {
-                  const current = index();
-                  return current === undefined ? undefined : timelineMessages()[current];
+                const group = createMemo(() => {
+                  const index = timelineIndexById().get(virtualRow.key);
+                  return index === undefined ? undefined : timelineMediaRows()[index];
                 });
-                const previousMessage = () => {
-                  const current = index();
-                  return current === undefined ? undefined : timelineMessages()[current - 1];
-                };
-                const initialMessage = untrack(message);
-                if (!initialMessage) return null;
-                const arrives = untrack(() => initialMessage.animate === true && markMessageSeen(initialMessage.id));
-                const initialActionMarker = untrack(() => initialMessage.actionMarker);
-                // Each state of a routine run is a new message, so the run's row is drawn again for
-                // each one. The run enters once, the first time a row of it is drawn; each new state
-                // is still announced.
-                const animateEntrance =
-                  initialActionMarker?.kind === "routine-run"
-                    ? untrack(() => markMessageSeen(`routine-run:${initialActionMarker.runId}`)) && arrives
-                    : arrives;
-                /*
-                 * The separator above the row. The first row always carries one, and a later row
-                 * carries one when it opens a new day. The agent chat shows no time under a message,
-                 * so a pause of an hour or more also gets one there. A message with no stored timestamp can only
-                 * open the transcript, so it falls back to the time it prints in its footer.
-                 */
-                const dayMarker = createMemo(() => {
-                  const current = message();
-                  if (!current) return null;
-                  const previous = previousMessage();
-                  if (current.createdAt)
-                    return dayMarkerLabel(previous?.createdAt, current.createdAt, {
-                      t,
-                      format,
-                      ...(channel || !compactActions() ? {} : { gapMs: AGENT_CHAT_TIME_GAP_MS }),
-                    });
-                  return previous === undefined ? (current.time ?? t("chat.day.now")) : null;
-                });
-                /*
-                 * A row that continues a run by the same sender draws no time: the run carries one
-                 * time at its top, and a header on every row leaves an empty line between them. A
-                 * row that draws a marker of its own opens a run, because the marker stands between
-                 * it and the message above it.
-                 */
-                const continuesRun = createMemo(() => {
-                  const current = message();
-                  if (!current) return false;
-                  if (current.id === unreadBoundaryMessageId() || current.actionMarker) return false;
-                  const previous = previousMessage();
-                  return continuesSenderRun(previous && senderRunRow(previous), senderRunRow(current), {
-                    previousDrawsTime: previous !== undefined && rowDrawsTime(previous),
-                    startsDay: dayMarker() !== null,
-                  });
-                });
-                const author = createMemo((): ChatMessageAuthor => {
-                  const current = message();
-                  const sender = otherSender(current);
-                  if (sender) return memberAuthor(sender);
-                  if (current?.author === "you")
-                    return { kind: "you", name: t("chat.message.you"), chatColor: ownChatColor() };
-                  if (channel && current) return channel.author(current);
-                  // The profile gives the row the agent's color, for the name and the bubble tint.
-                  return {
-                    kind: "agent",
-                    name: props.agent?.name ?? t("chat.message.agentFallback"),
-                    agent: props.agent,
-                  };
-                });
-                const referencedMessage = createMemo(() => {
-                  const replyToMessageId = message()?.replyToMessageId;
-                  if (!replyToMessageId) return undefined;
-                  return (
-                    timelineMessages().find((candidate) => candidate.id === replyToMessageId) ??
-                    props.messageReferences?.[replyToMessageId]
-                  );
-                });
-                const openReference = () => {
-                  const current = message();
-                  if (current) void replyJump.openReference(current);
-                };
-                // A quote of another person's message names them; any other quote keeps its label.
-                const referencedAuthorName = () => {
-                  const referenced = referencedMessage();
-                  const sender = otherSender(referenced);
-                  if (sender) return memberAuthor(sender).name;
-                  return channel && referenced?.author === "agent" ? channel.author(referenced).name : undefined;
-                };
-                // A workspace path is in the workspace of the agent that wrote it. A person's message in
-                // a channel names no agent, so its paths stay text.
-                const workspaceAgentId = () => {
-                  if (!channel) return props.agent?.id;
-                  const current = message();
-                  return current?.author === "agent" ? current.senderAgentId : undefined;
-                };
-                // A bare file name can be a file that the same turn attached, from a subfolder or a tool
-                // that reports no path. It opens when the workspace has no such file (#5189).
-                const turnAttachment = (path: string) => {
-                  const turnId = message()?.turnId;
-                  if (!turnId || /[/\\]/u.test(path)) return undefined;
-                  const matches = timelineMessages()
-                    .filter((candidate) => candidate.turnId === turnId)
-                    .flatMap((candidate) => candidate.attachments ?? [])
-                    .filter((attachment) => attachment.name === path);
-                  return matches.length === 1 ? matches[0] : undefined;
-                };
-                const imageScope = () => ({
-                  serverId: props.server?.id ?? "local",
-                  messageId: message()?.id ?? initialMessage.id,
-                  agentId: workspaceAgentId(),
-                });
-                // A chip joins a file name to the folder that the message names. When nothing is there,
-                // the name opens as the agent wrote it, from its workspace (#5270).
-                const writtenFile = (asWritten: string | undefined) => {
-                  const agentId = workspaceAgentId();
-                  return asWritten && agentId
-                    ? () => openWorkspaceFile(asWritten, undefined, agentId, "tab", turnAttachment(asWritten))
-                    : undefined;
-                };
-                // A row the host has not drawn yet has no reactions, replies or menu: its id is not the
-                // host's, even after the host answered.
-                const hostless = createMemo(() => message()?.id.startsWith(PENDING_SEND_ID_PREFIX) === true);
-                // The text before a waiting question is a step of the turn (#4897). A step keeps no
-                // reaction, reply or menu, and the row goes back into the steps after the answer.
-                const turnStep = createMemo(() => message()?.itemType === "commentary");
-                const pendingSend = createMemo(() => {
-                  const send = pendingSendFor(message()?.id);
-                  return send && send.state !== "sent" ? send : undefined;
-                });
-                // The status line stays one element while its state changes, so its live region speaks.
-                const pending = createMemo(() => pendingSend() !== undefined);
-                // Only the kind rebuilds the player, so its controls keep focus when it starts or stops.
-                const player = createMemo(() => voicePlayer(message()));
-                const playerKind = createMemo(() => player()?.kind);
-                // Only a reply has a speed: the user's own recording plays at normal speed.
-                const replySpeed = () => (playerKind() === "reply" ? speechSpeed() : undefined);
-                const replySpeedChange = () => (playerKind() === "reply" ? cycleSpeechSpeed : undefined);
-                const pendingState = () => {
-                  const state = pendingSend()?.state;
-                  return state === "failed" || state === "waiting" ? state : "sending";
-                };
-                const pendingRetrySafe = () => {
-                  const send = pendingSend();
-                  return send ? pendingSendRetrySafe(send) : false;
-                };
-                const markerOnly = untrack(() => markerOnlyMessage(initialMessage));
-                // Consecutive markers keep the tighter marker gap so they read as one group.
-                const groupedWithMarker = createMemo(() => {
-                  const current = message();
-                  if (!current?.actionMarker) return false;
-                  if (current.id === unreadBoundaryMessageId()) return false;
-                  const previous = previousMessage();
-                  return previous !== undefined && markerRowEndsWithMarker(previous);
-                });
-                if (markerOnly) {
-                  return (
-                    <div
-                      data-index={virtualRow.index}
-                      data-grouped={groupedWithMarker() ? "marker" : undefined}
-                      ref={messageVirtualizer.measureElement}
-                      class="virtual-chat-row"
-                      style={{
-                        transform: messageVirtualizer.isVirtualized()
-                          ? `translateY(${virtualRow.start - messageVirtualizer.scrollMargin()}px)`
-                          : "none",
-                      }}
-                    >
-                      <Show when={message()?.id === compactionBefore()}>
-                        <CompactionMarker />
-                      </Show>
-                      <Show when={dayMarker()}>
-                        {(label) => (
-                          <div class="time-marker">
-                            <span>{label()}</span>
-                          </div>
-                        )}
-                      </Show>
-                      <Show when={message()?.id === unreadBoundaryMessageId()}>
-                        <UnreadMessagesDivider
-                          animateIn={unreadDividerArrives}
-                          elementRef={(element) => {
-                            setUnreadMessagesDividerElement(element);
-                            scheduleUnreadDividerVisibilityUpdate();
-                          }}
-                        />
-                      </Show>
-                      <ChatRowBoundary>
-                        <article
-                          data-chat-search-message={message()?.id}
-                          data-chat-search-group={groupedMessageIds(message())}
-                          class={{ "chat-action-entry-animated": animateEntrance }}
-                        >
-                          <Show when={message()?.actionMarker ?? initialActionMarker}>
-                            {(marker) => (
-                              <Show
-                                when={routineCard(message() ?? initialMessage, marker())}
-                                fallback={
-                                  <Show
-                                    when={suggestionMarker(marker())}
-                                    fallback={
-                                      <Show
-                                        when={mcpSignInConfig(marker())}
-                                        fallback={
-                                          <Show
-                                            when={webhookRoutineCard(message() ?? initialMessage, marker())}
-                                            fallback={
-                                              <ChatActionMarker
-                                                onOpenSkill={
-                                                  agentSkillsMode(props.server, props.runtime) === "hidden"
-                                                    ? undefined
-                                                    : openSkillSettings
-                                                }
-                                                marker={marker()}
-                                                agents={props.agents}
-                                                announce={arrives}
-                                                routineAvailable={routineMarkerAvailable(
-                                                  marker(),
-                                                  availableRoutineIds(),
-                                                )}
-                                                onSelectAgent={props.onSelectAgent}
-                                                onOpenRoutine={openRoutineSettings}
-                                                openRoutineThread={openRoutineThread}
-                                                onOpenHostedSite={(url) => void openExternalMessageUrl(url)}
-                                                onOpenLink={(url) => void openExternalMessageUrl(url)}
-                                                onToggleRoutineRun={toggleRoutineRun}
-                                                onToggleAgentMessage={toggleAgentMessage}
-                                                agentMessageText={agentMessageText}
-                                                instructions={localInstructionsCalls()}
-                                                onOpenInstructions={
-                                                  channel || !localInstructionsCalls()
-                                                    ? undefined
-                                                    : openInstructionsSettings
-                                                }
-                                              />
-                                            }
-                                          >
-                                            {(card) => (
-                                              <RoutineWebhookChatCard
-                                                api={card().api}
-                                                action={card().action}
-                                                routine={card().routine}
-                                                connected={webhookRoutines.state.connected}
-                                                secret={webhookRoutines.state.secrets[card().routine.id] ?? null}
-                                                onSecret={(secret) =>
-                                                  webhookRoutines.setSecret(card().routine.id, secret)
-                                                }
-                                                onOpenRoutine={openRoutineSettings}
-                                              />
-                                            )}
-                                          </Show>
-                                        }
-                                      >
-                                        {(config) => (
-                                          <McpSignInChatCard
-                                            config={config()}
-                                            signedIn={props.mcpSignedIn?.(config().id) ?? false}
-                                            onSignIn={
-                                              props.onOpenMcpSignIn
-                                                ? (trigger) => props.onOpenMcpSignIn?.(config().id, trigger)
-                                                : undefined
-                                            }
-                                            onContinue={sendCardMessage}
-                                          />
-                                        )}
-                                      </Show>
-                                    }
-                                  >
-                                    {(suggestion) => (
-                                      <MarketplaceSuggestionChatCard
-                                        messageId={message()?.id ?? initialMessage.id}
-                                        appId={suggestion().appId}
-                                        connectors={props.connectors}
-                                        mcpServers={mcpServers()}
-                                        onOpenMarketplaceApp={props.onOpenMarketplaceApp}
-                                      />
-                                    )}
-                                  </Show>
-                                }
-                              >
-                                {(card) => (
-                                  <RoutineChatCard
-                                    action={card().action}
-                                    routine={card().routine}
-                                    agentId={card().agentId}
-                                    onOpenRoutine={openRoutineSettings}
-                                  />
-                                )}
-                              </Show>
-                            )}
-                          </Show>
-                          <Show
-                            when={
-                              initialMessage.exchange?.direction === "incoming" &&
-                              (message()?.attachments?.length ?? 0) > 0
-                            }
-                          >
-                            <div class="chat-action-attachments">
-                              <AttachmentCards
-                                attachments={message()?.attachments ?? []}
-                                mediaSource={runtime.attachmentMedia}
-                                downloads={attachmentDownloads}
-                                onPreview={(attachment) => void previewAttachment(attachment)}
-                                onAction={attachmentAction}
-                              />
-                            </div>
-                          </Show>
-                        </article>
-                      </ChatRowBoundary>
-                    </div>
-                  );
-                }
-                if (untrack(() => initialMessage.kind === "plan")) {
-                  // A plan has no bubble, reactions or time: it is the agent's live checklist.
-                  const plan = () => message()?.plan ?? initialMessage.plan;
-                  return (
-                    <div
-                      data-index={virtualRow.index}
-                      ref={messageVirtualizer.measureElement}
-                      class="virtual-chat-row"
-                      style={{
-                        transform: messageVirtualizer.isVirtualized()
-                          ? `translateY(${virtualRow.start - messageVirtualizer.scrollMargin()}px)`
-                          : "none",
-                      }}
-                    >
-                      <Show when={message()?.id === compactionBefore()}>
-                        <CompactionMarker />
-                      </Show>
-                      <Show when={dayMarker()}>
-                        {(label) => (
-                          <div class="time-marker">
-                            <span>{label()}</span>
-                          </div>
-                        )}
-                      </Show>
-                      <Show when={message()?.id === unreadBoundaryMessageId()}>
-                        <UnreadMessagesDivider
-                          animateIn={unreadDividerArrives}
-                          elementRef={(element) => {
-                            setUnreadMessagesDividerElement(element);
-                            scheduleUnreadDividerVisibilityUpdate();
-                          }}
-                        />
-                      </Show>
-                      <ChatRowBoundary>
-                        <article
-                          data-chat-search-message={message()?.id}
-                          class={{ "message-entry-animated": animateEntrance }}
-                        >
-                          <Show when={plan()}>
-                            {(current) => (
-                              <TaskList
-                                items={planItems(current(), message()?.streaming === true)}
-                                title={planTitle(current())}
-                                defaultOpen={untrack(() => initialMessage.streaming === true)}
-                              />
-                            )}
-                          </Show>
-                        </article>
-                      </ChatRowBoundary>
-                    </div>
-                  );
-                }
-                if (untrack(() => initialMessage.kind === "subagents")) {
-                  // The subagents have no bubble, reactions or time: they are the live work of the turn.
-                  const subagents = () => message()?.subagents ?? initialMessage.subagents;
-                  return (
-                    <div
-                      data-index={virtualRow.index}
-                      ref={messageVirtualizer.measureElement}
-                      class="virtual-chat-row"
-                      style={{
-                        transform: messageVirtualizer.isVirtualized()
-                          ? `translateY(${virtualRow.start - messageVirtualizer.scrollMargin()}px)`
-                          : "none",
-                      }}
-                    >
-                      <Show when={message()?.id === compactionBefore()}>
-                        <CompactionMarker />
-                      </Show>
-                      <Show when={dayMarker()}>
-                        {(label) => (
-                          <div class="time-marker">
-                            <span>{label()}</span>
-                          </div>
-                        )}
-                      </Show>
-                      <Show when={message()?.id === unreadBoundaryMessageId()}>
-                        <UnreadMessagesDivider
-                          animateIn={unreadDividerArrives}
-                          elementRef={(element) => {
-                            setUnreadMessagesDividerElement(element);
-                            scheduleUnreadDividerVisibilityUpdate();
-                          }}
-                        />
-                      </Show>
-                      <ChatRowBoundary>
-                        <article
-                          data-chat-search-message={message()?.id}
-                          class={{ "message-entry-animated": animateEntrance }}
-                        >
-                          <Show when={subagents()}>
-                            {(current) => (
-                              <SubagentGroup
-                                subagents={current()}
-                                selectedId={shownSubagentId()}
-                                onOpen={toggleSubagentPanel}
-                              />
-                            )}
-                          </Show>
-                        </article>
-                      </ChatRowBoundary>
-                    </div>
-                  );
-                }
-                if (untrack(() => initialMessage.kind === "memory-changes" || initialMessage.kind === "thinking")) {
-                  // Only a finished turn with no answer gets this row: an answer shows the steps above it.
-                  return (
-                    <div
-                      data-index={virtualRow.index}
-                      ref={messageVirtualizer.measureElement}
-                      class="virtual-chat-row"
-                      style={{
-                        transform: messageVirtualizer.isVirtualized()
-                          ? `translateY(${virtualRow.start - messageVirtualizer.scrollMargin()}px)`
-                          : "none",
-                      }}
-                    >
-                      <Show when={message()?.id === unreadBoundaryMessageId()}>
-                        <UnreadMessagesDivider
-                          animateIn={unreadDividerArrives}
-                          elementRef={(element) => {
-                            setUnreadMessagesDividerElement(element);
-                            scheduleUnreadDividerVisibilityUpdate();
-                          }}
-                        />
-                      </Show>
-                      <ChatRowBoundary>
-                        <article data-chat-search-message={message()?.id}>
-                          <AgentStepsDisclosure
-                            steps={turnSteps.stepsOfTurn((message() ?? initialMessage).turnId)}
-                            defaultOpen={showAgentSteps()}
-                          />
-                        </article>
-                      </ChatRowBoundary>
-                    </div>
-                  );
-                }
-                const initialVisual = untrack(() => chatVisualReply(initialMessage));
-                // The desktop loads the page from its own scheme. The web client has no page URL: it
-                // reads the HTML and shows it as `srcdoc`. Another client shows the title and file.
-                const loadPage = runtime.visualPage;
-                if (initialVisual && (chatVisualPageUrl(initialVisual.attachment.previewUrl) || loadPage)) {
-                  // A visual reply is the agent's page. It shows above the final reply, with no bubble.
-                  const visual = () => chatVisualReply(message() ?? initialMessage) ?? initialVisual;
-                  const pageUrl = () => chatVisualPageUrl(visual().attachment.previewUrl);
-                  // The page quotes as its file, as in the side panel, so the quote chip opens the page.
-                  const pageQuoteId = () =>
-                    fileQuoteId({
-                      source: "attachment",
-                      attachmentId: visual().attachment.id,
-                      name: visual().attachment.name,
-                    });
-                  const [page, setPage] = createSignal<{ html?: string; failed?: boolean }>({});
-                  if (loadPage && !pageUrl()) {
-                    let mounted = true;
-                    onCleanup(() => {
-                      mounted = false;
-                    });
-                    void loadPage(initialVisual.attachment).then(
-                      (html) => {
-                        if (mounted) setPage({ html });
-                      },
-                      () => {
-                        if (mounted) setPage({ failed: true });
-                      },
-                    );
-                  }
-                  return (
-                    <div
-                      data-index={virtualRow.index}
-                      ref={messageVirtualizer.measureElement}
-                      class="virtual-chat-row"
-                      style={{
-                        transform: messageVirtualizer.isVirtualized()
-                          ? `translateY(${virtualRow.start - messageVirtualizer.scrollMargin()}px)`
-                          : "none",
-                      }}
-                    >
-                      <Show when={message()?.id === compactionBefore()}>
-                        <CompactionMarker />
-                      </Show>
-                      <Show when={dayMarker()}>
-                        {(label) => (
-                          <div class="time-marker">
-                            <span>{label()}</span>
-                          </div>
-                        )}
-                      </Show>
-                      <Show when={message()?.id === unreadBoundaryMessageId()}>
-                        <UnreadMessagesDivider
-                          animateIn={unreadDividerArrives}
-                          elementRef={(element) => {
-                            setUnreadMessagesDividerElement(element);
-                            scheduleUnreadDividerVisibilityUpdate();
-                          }}
-                        />
-                      </Show>
-                      <ChatRowBoundary>
-                        <article
-                          data-chat-search-message={message()?.id}
-                          aria-label={(message() ?? initialMessage).body}
-                          class={{ "message-entry-animated": animateEntrance }}
-                        >
-                          <ChatVisual
-                            src={pageUrl()}
-                            html={page().html}
-                            failed={pageUrl() === undefined && (!loadPage || page().failed === true)}
-                            title={(message() ?? initialMessage).body}
-                            height={visual().height}
-                            onOpenLink={(url) => void openExternalMessageUrl(url)}
-                            onMessage={addPageText}
-                            onContext={(text) => setPageContext(message() ?? initialMessage, text)}
-                            onQuote={(text) => quoteSelection(pageQuoteId(), text)}
-                            quoteShortcut={deviceQuoteShortcut(props.platform)}
-                            onOpenInSidePanel={() => void previewAttachment(visual().attachment)}
-                            isAppShortcut={isChatVisualAppShortcut}
-                            macWindowControls={props.platform === "darwin"}
-                          />
-                        </article>
-                      </ChatRowBoundary>
-                    </div>
-                  );
-                }
-                const displayedReactions = createMemo(() => {
-                  const currentMessage = message();
-                  if (currentMessage?.reactions?.length) return currentMessage.reactions;
-                  if (currentMessage?.reaction) {
-                    return [{ emoji: currentMessage.reaction, actor: { kind: "user" as const } }];
-                  }
-                  return (currentMessage?.reactionSummary?.emojis ?? []).map((emoji) => ({
-                    emoji,
-                    actor: { kind: "user" as const },
-                  }));
-                });
-                // The action row and the right-click menu run the same actions.
-                const messageActions = {
-                  onReact: (emoji: MessageReaction | null) => {
-                    const currentMessage = message();
-                    if (currentMessage) void reactToMessage(currentMessage, emoji);
-                  },
-                  onReply: () => {
-                    const currentMessage = message();
-                    if (currentMessage) replyToMessage(currentMessage);
-                  },
-                  onCopy: () => {
-                    const currentMessage = message();
-                    if (currentMessage) void copyMessage(currentMessage);
-                  },
-                };
-                // An agent's actions stand beside its answer, and its steps show with them and open only the
-                // trace. In an agent chat, "Show agent steps" keeps the open list above the answer.
-                const stepsInRow = () =>
-                  author().kind === "agent" && !message()?.questionPrompt && (Boolean(channel) || !showAgentSteps());
-                // The reader's own actions stand beside the bubble, so a run of their messages sits close.
-                const actionsBeside = () => stepsInRow() || author().kind === "you";
-                const stepsDisclosure = () => (
-                  <Show when={turnSteps.stepsAbove(message()?.id)}>
-                    {(steps) => (
-                      <AgentStepsDisclosure
-                        steps={steps()}
-                        defaultOpen={showAgentSteps()}
-                        list={!stepsInRow()}
-                        trace={traceAbove(
-                          message()?.id,
-                          channel && author().kind === "agent" ? author().name : undefined,
-                        )}
-                        facts={turnSteps.factsAbove(message()?.id)}
-                      />
-                    )}
-                  </Show>
-                );
-                const messageReadAloud = () =>
-                  spokenReplyIds().has((message() ?? initialMessage).id)
-                    ? undefined
-                    : readAloudAction(message() ?? initialMessage);
-                // The right-click menu and the More button of the action row show the same items.
-                const menuItems = (): MessageMenuItemsProps => ({
-                  message: message() ?? initialMessage,
-                  reactions: !channel,
-                  ...messageActions,
-                  readAloud: messageReadAloud(),
-                  onMarkUnread: markUnreadAction(message() ?? initialMessage),
-                  sendToChannel: sendToChannelAction(message() ?? initialMessage),
-                  onBranch: branchAction(message() ?? initialMessage),
-                  branchDisabled: Boolean(props.activeTurnId),
-                  onDelete: deleteAction(message() ?? initialMessage),
-                });
-                /*
-                 * With "Compact message actions" on, the row shows React, Reply and More. With it off, the row
-                 * shows every action and the time, as before. Named functions keep the conditions out of the
-                 * component props.
-                 */
-                const rowMenu = () => (compactActions() ? () => <MessageMenuItems {...menuItems()} /> : undefined);
-                const rowCopy = () => (compactActions() ? undefined : messageActions.onCopy);
-                const rowCopied = () => !compactActions() && copiedMessageId() === message()?.id;
-                const rowReadAloud = () => (compactActions() ? undefined : messageReadAloud());
-                const rowBranch = () => (compactActions() ? undefined : branchAction(message() ?? initialMessage));
-                const rowActionTime = () => Boolean(channel) || !compactActions();
                 return (
-                  <div
-                    data-index={virtualRow.index}
-                    data-grouped={groupedWithMarker() ? "marker" : continuesRun() ? "sender" : undefined}
-                    ref={messageVirtualizer.measureElement}
-                    class="virtual-chat-row"
-                    style={{
-                      transform: messageVirtualizer.isVirtualized()
-                        ? `translateY(${virtualRow.start - messageVirtualizer.scrollMargin()}px)`
-                        : "none",
-                    }}
+                  <Show
+                    when={(group()?.messages.length ?? 0) > 1}
+                    fallback={<TimelineMessageRow row={virtualRow} messageId={group()?.id ?? String(virtualRow.key)} />}
                   >
-                    <Show when={message()?.id === compactionBefore()}>
-                      <CompactionMarker />
-                    </Show>
-                    <Show when={dayMarker()}>
-                      {(label) => (
-                        <div class="time-marker">
-                          <span>{label()}</span>
-                        </div>
-                      )}
-                    </Show>
-                    <Show when={message()?.id === unreadBoundaryMessageId()}>
-                      <UnreadMessagesDivider
-                        animateIn={unreadDividerArrives}
-                        elementRef={(element) => {
-                          setUnreadMessagesDividerElement(element);
-                          scheduleUnreadDividerVisibilityUpdate();
-                        }}
-                      />
-                    </Show>
-                    <Show when={!stepsInRow() && turnSteps.stepsAbove(message()?.id)}>
-                      <ChatRowBoundary>{stepsDisclosure()}</ChatRowBoundary>
-                    </Show>
-                    <ChatRowBoundary>
-                      <Show
-                        when={message()?.questionPrompt}
-                        keyed
-                        fallback={
-                          <ChatMessageRow
-                            message={message() ?? initialMessage}
-                            author={author()}
-                            showFull={
-                              chatSearchOpen() && chatSearchOpensMessage(message()?.body ?? "", chatSearchQuery())
-                            }
-                            open={quotedMessageId() === message()?.id && chatSearchCanOpen(message()?.body ?? "")}
-                            showAuthor={
-                              author().kind === "member" || (channel && author().kind === "agent")
-                                ? !continuesRun()
-                                : undefined
-                            }
-                            showTime={!continuesRun()}
-                            actionRow={!turnStep()}
-                            actionTime={rowActionTime()}
-                            steps={stepsInRow() ? stepsDisclosure() : undefined}
-                            actionsBeside={actionsBeside()}
-                            animate={animateEntrance}
-                            // Natural shows a message once it is complete, in an agent chat and in a channel.
-                            // Its bubble enters with all of its text, so the height does not grow while the
-                            // words fade in, and a complete answer does not look as if it still arrives.
-                            textAtOnce={props.responseStyle === "natural"}
-                            agents={props.agents}
-                            skills={installedSkills()}
-                            referencedMessage={referencedMessage()}
-                            referencedAuthorName={referencedAuthorName()}
-                            onOpenReference={openReference}
-                            referenceState={replyJump.referenceState(message(), referencedMessage())}
-                            reactions={channel ? undefined : displayedReactions()}
-                            reactionOverflowCount={message()?.reactionSummary?.overflowCount}
-                            onRemoveReaction={() => {
-                              const currentMessage = message();
-                              if (currentMessage) void reactToMessage(currentMessage, null);
-                            }}
-                            data-chat-search-message={message()?.id}
-                            onSelectAgent={props.onSelectAgent}
-                            onOpenLink={(url) => void openExternalMessageUrl(url)}
-                            onPreview={(attachment) => void previewAttachment(attachment)}
-                            onAttachmentAction={attachmentAction}
-                            onOpenSharedFile={(path, asWritten) => openSharedFile(path, "tab", writtenFile(asWritten))}
-                            onOpenWorkspaceFile={
-                              workspaceAgentId()
-                                ? (path, asWritten) =>
-                                    openWorkspaceFile(
-                                      path,
-                                      undefined,
-                                      workspaceAgentId(),
-                                      "tab",
-                                      turnAttachment(path),
-                                      writtenFile(asWritten),
-                                    )
-                                : undefined
-                            }
-                            onOpenQuote={openQuote}
-                            onOpenTag={openTaggedReference}
-                            onDownload={(attachment) => attachmentAction(attachment, "download")}
-                            mediaSource={runtime.attachmentMedia}
-                            downloads={attachmentDownloads}
-                            macWindowControls={props.platform === "darwin"}
-                            loadImageFile={messageImageFiles && ((file) => messageImageFiles.load(file, imageScope()))}
-                            onDownloadImageFile={
-                              messageImageFiles &&
-                              ((file) =>
-                                downloadMessageImageFile(
-                                  messageImageFiles.source(file, imageScope()),
-                                  workspaceAgentId(),
-                                ))
-                            }
-                            actions={
-                              <>
-                                <Show when={pending()}>
-                                  <PendingSendStatus
-                                    state={pendingState()}
-                                    updateRequired={Boolean(providerUpdateRequired())}
-                                    error={pendingSend()?.error ?? null}
-                                    retrySafe={pendingRetrySafe()}
-                                    canEdit={!composerHasContent() && !editingDeliveryId()}
-                                    onRetry={() => {
-                                      const send = pendingSend();
-                                      if (send) retryPendingSend(send.clientMessageId);
-                                    }}
-                                    onEdit={() => {
-                                      const send = pendingSend();
-                                      if (send) editPendingSend(send.clientMessageId);
-                                    }}
-                                    onDismiss={() => {
-                                      const send = pendingSend();
-                                      if (send) dismissPendingSend(send.clientMessageId);
-                                    }}
-                                  />
-                                </Show>
-                                <Show when={!hostless() && !turnStep()}>
-                                  <MessageActions
-                                    message={message() ?? initialMessage}
-                                    pickerOpen={openReactionMessageId() === message()?.id}
-                                    expandedEmoji={expandedEmojiMessageId() === message()?.id}
-                                    reactions={!channel}
-                                    authorName={channel ? author().name : undefined}
-                                    onTogglePicker={() => {
-                                      const messageId = message()?.id;
-                                      if (!messageId) return;
-                                      setOpenReactionMessageId((current) => (current === messageId ? null : messageId));
-                                      setExpandedEmojiMessageId(null);
-                                    }}
-                                    onExpandEmoji={() => {
-                                      const messageId = message()?.id;
-                                      if (!messageId) return;
-                                      setExpandedEmojiMessageId((current) =>
-                                        current === messageId ? null : messageId,
-                                      );
-                                    }}
-                                    onReact={messageActions.onReact}
-                                    onReply={messageActions.onReply}
-                                    menu={rowMenu()}
-                                    onCopy={rowCopy()}
-                                    copied={rowCopied()}
-                                    readAloud={rowReadAloud()}
-                                    onBranch={rowBranch()}
-                                    branchDisabled={Boolean(props.activeTurnId)}
-                                  />
-                                </Show>
-                              </>
-                            }
-                            menu={
-                              hostless() || turnStep()
-                                ? undefined
-                                : () => (
-                                    <MessageMenu {...menuItems()} authorName={channel ? author().name : undefined} />
-                                  )
-                            }
-                          >
-                            <Show when={playerKind()}>
-                              {(kind) => (
-                                <VoicePlayer
-                                  kind={kind()}
-                                  state={player()?.state ?? "idle"}
-                                  peaks={player()?.peaks}
-                                  duration={player()?.duration}
-                                  elapsed={player()?.elapsed}
-                                  levels={player()?.levels}
-                                  onToggle={() => player()?.onToggle()}
-                                  onSeek={(seconds) => player()?.onSeek?.(seconds)}
-                                  speed={replySpeed()}
-                                  onCycleSpeed={replySpeedChange()}
-                                />
-                              )}
-                            </Show>
-                          </ChatMessageRow>
-                        }
-                      >
-                        {(questionPrompt) => (
-                          <Show
-                            when={frozenUiBlock(message())}
-                            fallback={
-                              <Show when={questionPrompt.resolution} keyed>
-                                {(resolution) => (
-                                  <article
-                                    data-chat-search-message={message()?.id}
-                                    class="question-prompt-history-entry"
-                                  >
-                                    <QuestionPromptBubble
-                                      questions={questionPrompt.questions}
-                                      resolution={resolution}
-                                      onSubmit={async () => false}
-                                      onOpenLink={(url) => void openExternalMessageUrl(url)}
-                                    />
-                                  </article>
-                                )}
-                              </Show>
-                            }
-                          >
-                            {(block) => (
-                              <article data-chat-search-message={message()?.id} class="question-prompt-history-entry">
-                                <UiBlockPrompt
-                                  block={block()}
-                                  agents={props.agents}
-                                  onSelectAgent={props.onSelectAgent}
-                                  onOpenLink={(url) => void openExternalMessageUrl(url)}
-                                />
-                              </article>
-                            )}
-                          </Show>
-                        )}
-                      </Show>
-                    </ChatRowBoundary>
-                  </div>
+                    <div
+                      class="virtual-chat-row"
+                      data-index={virtualRow.index}
+                      ref={messageVirtualizer.measureElement}
+                      data-chat-search-group={group()
+                        ?.messages.map((message) => message.id)
+                        .join(" ")}
+                      style={{
+                        transform: messageVirtualizer.isVirtualized()
+                          ? `translateY(${virtualRow.start - messageVirtualizer.scrollMargin()}px)`
+                          : "none",
+                      }}
+                    >
+                      <MediaRunHeader messageId={group()?.id ?? ""} />
+                      <div class="message-media-run">
+                        <For each={group()?.messages ?? []} keyed={(message) => message.id}>
+                          {(message) => <TimelineMessageRow row={virtualRow} messageId={message().id} embedded />}
+                        </For>
+                      </div>
+                    </div>
+                  </Show>
                 );
               }}
             </For>

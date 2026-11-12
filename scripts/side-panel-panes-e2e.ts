@@ -16,7 +16,7 @@ import { chromium, type Page } from "playwright-core";
 const OUT = resolve(import.meta.dirname, "../.openbot-build/side-panel-panes-e2e");
 const STORY = "app--playground";
 /** The panes that the Chief agent of the story lists, in the order of `SIDE_PANEL_PANES`. */
-const LISTED = ["Browser", "Files", "Agent settings", "Voice"];
+const LISTED = ["Agent central", "Browser", "Files", "Agent settings", "Voice"];
 const WAIT_MS = 15_000;
 
 function option(name: string): string | undefined {
@@ -37,7 +37,7 @@ const report: { passed: boolean; checks: typeof checks; errors: string[]; error?
 };
 
 /** The tab names of the panes. The Browser pane adds the tabs of its pages to the same tab list. */
-const PANE_NAMES = ["Browser", "Files", "Agent settings", "Voice", "Side question"];
+const PANE_NAMES = ["Agent central", "Browser", "Files", "Agent settings", "Voice", "Side question"];
 
 /** The pane tabs of the side panel, as "Name" or "Name*" for the selected tab. */
 function paneTabs(page: Page): Promise<string[]> {
@@ -105,7 +105,9 @@ try {
   await toggle.waitFor({ timeout: 60_000 });
 
   // The launcher lists the panes that this chat can open, in registry order.
-  await toggle.click();
+  await page.getByRole("tab", { name: "Agent central", exact: true }).waitFor();
+  check("default: opens Agent central", same(await paneTabs(page), ["Agent central*"]));
+  await closeTab(page, "Agent central");
   await page.locator(".side-panel-launcher").waitFor();
   const launcher = (await page.locator(".side-panel-launch").allInnerTexts()).map((text) => text.trim());
   check(
@@ -178,24 +180,25 @@ try {
     restored,
   });
 
-  // Each agent has its own tabs. An agent change closes Agent settings and Files (`resetPanelsForAgent`),
-  // so Voice shows during the change.
+  // Settings follows navigation; Voice and browser tabs still belong to their own agent.
   await page.getByRole("tab", { name: "Voice" }).click();
   await tabsBecome(page, ["Agent settings", "Voice*"]);
   await selectAgent(page, "Research");
-  const researchBefore = await tabsBecome(page, []);
-  await toggle.click();
-  await page.getByRole("button", { name: "Open Browser" }).click();
-  await tabsBecome(page, ["Browser*"]);
+  const researchBefore = await tabsBecome(page, ["Agent settings*"]);
+  await addPane(page, "Browser");
+  await tabsBecome(page, ["Agent settings", "Browser*"]);
   await selectAgent(page, "Chief");
-  const chief = await tabsBecome(page, ["Agent settings", "Voice*"]);
+  const chief = await tabsBecome(page, ["Agent settings*", "Voice"]);
   await selectAgent(page, "Research");
-  const research = await tabsBecome(page, ["Browser*"]);
+  const research = await tabsBecome(page, ["Agent settings*", "Browser"]);
   await selectAgent(page, "Chief");
+  await page.getByRole("tab", { name: "Voice", exact: true }).click();
   await tabsBecome(page, ["Agent settings", "Voice*"]);
   check(
-    "agents: each agent keeps its own tabs",
-    researchBefore.length === 0 && same(chief, ["Agent settings", "Voice*"]) && same(research, ["Browser*"]),
+    "agents: settings follows navigation while contextual tabs stay with their agent",
+    same(researchBefore, ["Agent settings*"]) &&
+      same(chief, ["Agent settings*", "Voice"]) &&
+      same(research, ["Agent settings*", "Browser"]),
     { researchBefore, chief, research },
   );
 

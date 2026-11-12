@@ -72,6 +72,8 @@ export interface SidePanelsState {
   side: Record<string, SidePanelState>;
   subagents: Record<string, string>;
   threads: Record<string, string>;
+  /** A navigation preference of this server, never another agent's content or draft. */
+  preference?: "central" | "settings" | "none";
 }
 
 /** While the agent's turn runs, the shown file is read again at most this often. */
@@ -105,6 +107,42 @@ export interface PanelsStoreDeps {
 
 export function createPanelsStore(deps: PanelsStoreDeps) {
   const scopeActive = createScopeGuard();
+  const preferenceKey = untrack(() => `openbot:agent-panel:${deps.props.server?.id ?? "local"}`);
+  let savedPreference: SidePanelsState["preference"] = "central";
+  try {
+    const stored = window.localStorage.getItem(preferenceKey);
+    if (stored === "central" || stored === "settings" || stored === "none") savedPreference = stored;
+  } catch {
+    // An unavailable preference store must not block the chat.
+  }
+  function rememberPanelPreference(mode: "central" | "settings" | "none") {
+    if (channel) return;
+    deps.setPanels((draft) => {
+      draft.preference = mode;
+    });
+    try {
+      window.localStorage.setItem(preferenceKey, mode);
+    } catch {
+      // The server-owned state still keeps the choice for this window.
+    }
+  }
+  /** Shared navigation follows the person; browser, voice, files and threads keep their own tabs. */
+  function restoreAgentPanel(agentId: string, panel: RightPanelMode | undefined) {
+    if (channel) return;
+    const preference = deps.panels.preference ?? savedPreference ?? "central";
+    if (
+      preference === "settings" ||
+      preference === "none" ||
+      !panel ||
+      panel === "none" ||
+      panel === "settings" ||
+      panel === "central"
+    ) {
+      setActiveRightPanel(preference, agentId);
+      return preference;
+    }
+    return panel;
+  }
   const [skillSettingsRequest, setSkillSettingsRequest] = createSignal<{ agentId: string; skillId: string } | null>(
     null,
   );
@@ -213,6 +251,7 @@ export function createPanelsStore(deps: PanelsStoreDeps) {
 
   function setActiveRightPanel(mode: RightPanelMode, agentId = conversationOwnerId(deps.props)) {
     if (!agentId) return;
+    if (mode === "central" || mode === "settings") rememberPanelPreference(mode);
     // A file read that is still running must not replace what the panel shows now.
     if (mode !== "file-preview") deps.invalidateFilePreviewGeneration();
     if (mode !== "settings") {
@@ -350,6 +389,23 @@ export function createPanelsStore(deps: PanelsStoreDeps) {
       return;
     }
     attachmentFiles.open(attachment, action);
+  }
+
+  function revealChatFile(path: string, kind: "shared" | "workspace", agentId = deps.props.agent?.id) {
+    if (deps.props.runtime || (deps.props.server?.id ?? "local") !== "local") return;
+    const ownerAgentId = conversationOwnerId(deps.props);
+    if (!ownerAgentId) return;
+    const agent = conversationRuntime(deps.props).agent;
+    const operation =
+      kind === "shared"
+        ? agent.openSharedFile({ path, action: "reveal" })
+        : agentId
+          ? agent.openWorkspaceFile({ agentId, path, action: "reveal" })
+          : undefined;
+    void operation?.catch((error) => {
+      if (scopeActive())
+        deps.setComposerError(filePreviewError(error, path), { agentId: ownerAgentId, serverId: "local" });
+    });
   }
 
   /** `fallback` opens another target when nothing exists at `path`, in place of the error. */
@@ -707,6 +763,8 @@ export function createPanelsStore(deps: PanelsStoreDeps) {
 
   return {
     skillSettingsRequest,
+    rememberPanelPreference,
+    restoreAgentPanel,
     openSkillSettings,
     instructionsSettingsRequest,
     openInstructionsSettings,
@@ -738,6 +796,7 @@ export function createPanelsStore(deps: PanelsStoreDeps) {
     attachmentAction,
     attachmentDownloads,
     openSharedFile,
+    revealChatFile,
     openWorkspaceFile,
     openWorkspaceFolder,
     openWorkspaceFolderEntry,

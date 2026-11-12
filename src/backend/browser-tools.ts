@@ -526,8 +526,8 @@ const BROWSER_TOOL_DEFINITIONS = [
   browserTool({
     name: "screenshot",
     description:
-      "Capture the visible page as a separate image content item. With a ref, capture only that element: a smaller image costs less context.",
-    shape: { tabId, ref: identifier.optional() },
+      "Capture the visible page as an image for you to inspect. Set attach=true when the user asks to receive the screenshot: OpenBot also saves it as an image attachment in the current conversation. Without attach, the user does not see it. With a ref, capture only that element: a smaller image costs less context.",
+    shape: { tabId, ref: identifier.optional(), attach: z.boolean().optional() },
   }),
   browserTool({
     name: "run_script",

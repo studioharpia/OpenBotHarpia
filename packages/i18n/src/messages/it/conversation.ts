@@ -2,6 +2,28 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/conversation";
 
 export const messages = {
+  "conversation.threads.error.transfer": "Impossibile spostare l’attività.",
+
+  "conversation.sidePanel.pane.central": "Centro agente",
+  "conversation.central.mainChat": "Conversazione principale",
+  "conversation.central.overview": "Panoramica",
+  "conversation.central.currentMonth": "Mese attuale",
+  "conversation.central.previousMonth": "Mese scorso",
+  "conversation.central.tokens": "Token usati",
+  "conversation.central.finishedTasks": "Attività concluse",
+  "conversation.central.finishedHint":
+    "Ogni attività viene conteggiata una volta, alla prima conclusione riuscita. Sono incluse le attività archiviate.",
+  "conversation.central.completedTasks": "Completate",
+  "conversation.central.inProgressTasks": "In corso",
+  "conversation.central.emptySection": "Nessuna attività in questa sezione.",
+  "conversation.central.statusRunning": "In esecuzione",
+  "conversation.central.statusStarting": "Connessione",
+  "conversation.central.statusReady": "Disponibile",
+  "conversation.central.statusUnavailable": "Non disponibile",
+  "conversation.central.activity": "Attività dei token",
+  "conversation.central.archivedTasks": "Archiviate",
+  "conversation.central.newTask": "Nuova attività",
+  "conversation.central.taskActions": "Azioni per {title}",
   "conversation.globalSearch.title": "Cerca in OpenBot",
   "conversation.globalSearch.filter": "Filtra i risultati",
   "conversation.globalSearch.tab.all": "Tutto",
@@ -63,6 +85,8 @@ export const messages = {
   "conversation.sidePanel.pane.browser": "Browser",
   "conversation.sidePanel.pane.files": "File",
   "conversation.threads.new": "Nuovo thread",
+  "conversation.threads.showSidebar": "Mostra attività nella barra laterale",
+  "conversation.threads.showTopbar": "Mostra attività nella barra superiore",
   "conversation.threads.all": "Tutti i thread",
   "conversation.threads.open": "Thread aperti",
   "conversation.threads.current": "Thread: {title}",

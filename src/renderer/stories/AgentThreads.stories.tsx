@@ -7,8 +7,14 @@ import { createAppDom, openChat, PrototypeApp } from "./prototype-support";
 import "./agent-threads-story.css";
 
 /** The real app on Chief, with the open tabs that this device stored. */
-function AgentThreadsApp(props: { open: string[]; active: string | null; options?: MockOpenBotOptions }) {
+function AgentThreadsApp(props: {
+  open: string[];
+  active: string | null;
+  options?: MockOpenBotOptions;
+  sidebar?: boolean;
+}) {
   const options = props.options ?? THREAD_OPTIONS;
+  localStorage.setItem("openbot:thread-placement", props.sidebar ? "sidebar" : "topbar");
   localStorage.setItem(
     TABS_KEY,
     JSON.stringify({ [LOCAL_SERVER_ID]: { [AGENT_ID]: { open: props.open, active: props.active } } }),
@@ -79,3 +85,47 @@ export const BranchOfDeletedThread: Story = {
 
 /** No side thread is open: the header shows only "New thread" and the menu. */
 export const NoTabs: Story = { render: () => <AgentThreadsApp open={[]} active={null} /> };
+
+/** Parallel tasks below their agent with the same state marks and conversation actions. */
+export const SidebarThreads: Story = {
+  render: () => <AgentThreadsApp open={["pricing", "competitors", "release", "links"]} active="pricing" sidebar />,
+};
+
+/** Existing full-app fixture: one task waits for approval, another failed. */
+export const SidebarAttention: Story = {
+  render: () => (
+    <AgentThreadsApp
+      open={["pricing", "competitors", "release", "links"]}
+      active="pricing"
+      sidebar
+      options={{
+        ...THREAD_OPTIONS,
+        runtimeSnapshot: {
+          agents: [],
+          activeTurns: [],
+          work: [],
+          latestMessages: [],
+          attentionComplete: true,
+          pendingPrompts: [],
+          pendingBrowserTakeovers: [],
+          failedTurns: [],
+          pendingApprovals: [
+            {
+              requestId: "sidebar-attention-approval",
+              truncated: false,
+              agentId: AGENT_ID,
+              threadId: "thread-competitors",
+              turnId: "turn-competitors",
+              kind: "file-change",
+              command: null,
+              cwd: "/Users/you/OpenBot/Agents/Chief",
+              reason: "Save competitor comparison",
+              grantRoot: "/Users/you/Desktop",
+              permissions: null,
+            },
+          ],
+        },
+      }}
+    />
+  ),
+};

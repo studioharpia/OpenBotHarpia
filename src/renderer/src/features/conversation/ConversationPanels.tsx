@@ -1,16 +1,68 @@
-import { LOCAL_SERVER_ID, type ServerSummary } from "@openbot/contracts/ipc";
+import { INPUT_LIMITS } from "@openbot/contracts/input-limits";
+import {
+  type AgentTask,
+  analyticsRange,
+  analyticsTokens,
+  type HostAnalytics,
+  LOCAL_SERVER_ID,
+  type ServerSummary,
+} from "@openbot/contracts/ipc";
 import { AGENT_NOTIFICATION_LEVELS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-notification-levels-v1";
 import { BROWSER_PROFILES_CAPABILITY } from "@openbot/contracts/team-protocol/browser-profiles-v1";
+import { isAgentTaskActive } from "@openbot/team-client/agent-tasks";
 import { classifyFailure } from "@openbot/telemetry";
-import { SETTINGS_PANEL_DEFAULT, SETTINGS_PANEL_MAX } from "@openbot/ui/components/SettingsPanel";
+import {
+  Archive,
+  ArchiveRestore,
+  Badge,
+  Button,
+  buttonVariants,
+  ChevronDown,
+  DropdownMenu,
+  Ellipsis,
+  ExternalLink,
+  Input,
+  MessageSquare,
+  PencilLine,
+  Plus,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Settings,
+  Trash2,
+} from "@openbot/ui";
+import { PanelResizer } from "@openbot/ui/components/PanelResizer";
+import {
+  SETTINGS_PANEL_DEFAULT,
+  SETTINGS_PANEL_MAX,
+  SettingsPanel,
+  SettingsPanelContent,
+  SettingsPanelHeader,
+} from "@openbot/ui/components/SettingsPanel";
+import { AgentAvatar } from "@openbot/ui/features/agents/AgentAvatar";
 import { BROWSER_NEW_TAB_URL } from "@openbot/ui/features/browser/browser-suggestions";
+import { type AgentTaskWait, agentTaskStatus } from "@openbot/ui/features/conversation/AgentTasks";
 import { SidePanelHeader, SidePanelLauncher, type SidePanelPane } from "@openbot/ui/features/conversation/SidePanel";
 import { SideQuestionPanel } from "@openbot/ui/features/conversation/SideQuestionPanel";
 import { SubagentPanel } from "@openbot/ui/features/conversation/Subagents";
+import { TaskMark, type TaskMarkState } from "@openbot/ui/features/conversation/TaskList";
+import {
+  startTaskTransfer,
+  ThreadTitle,
+  threadAttention,
+} from "@openbot/ui/features/conversation/threads/ThreadHeader";
+import { MAIN_THREAD_ID } from "@openbot/ui/features/conversation/threads/thread-types";
 import { VoicePanel } from "@openbot/ui/features/conversation/VoicePanel";
 import { McpSignInRelayDialog } from "@openbot/ui/features/settings/McpSignInPage";
+import { ProfileHeatmap } from "@openbot/ui/features/settings/ProfileActivity";
+import { SidebarWaitIcon } from "@openbot/ui/features/sidebar/SidebarAgentIndicator";
+import { sidebarMessageTime } from "@openbot/ui/features/sidebar/sidebar-filtering";
+import { usageCompact } from "@openbot/ui/features/usage/usage-format";
 import { useText } from "@openbot/ui/text";
 import { actionToast } from "../../action-toast";
+import { savePanelWidth } from "../../components/panel-width-storage";
 import { deviceQuoteShortcut } from "../../send-shortcut-preference";
 import { type AgentTemplatePublishCalls, agentTemplatesPort } from "../agent-templates/agent-templates-port";
 import { createPublishAgent } from "../agent-templates/PublishAgent";
@@ -21,7 +73,9 @@ import { serverCanAdminister, serverSupportsCapability } from "../servers/server
 import { codexLiveAccess } from "../speech/codex-live-access";
 import { speechPort } from "../speech/speech-port";
 import { cycleSpeechSpeed, speechSpeed } from "../speech/speech-speed";
+import { usagePort } from "../usage/usage-port";
 import { ConversationSideThread } from "./ConversationSideThread";
+import { setCentralTaskSectionCollapsed, useCentralTaskSections } from "./central-task-sections";
 import { isChatVisualAppShortcut } from "./chat-visual-shortcuts";
 import { htmlAttachmentPageHtml, htmlAttachmentPageUrl } from "./chat-visual-url";
 import { useConversationController } from "./conversation-controller-context";
@@ -40,7 +94,19 @@ const loadAgentSettingsPanel = () => import("./AgentSettingsPanel");
 
 import { type HostFolderPick, HostFolderPicker } from "@openbot/ui/features/conversation/HostFolderPicker";
 import { Portal } from "@solidjs/web";
-import { createEffect, createMemo, createSignal, Loading, lazy, onSettled, Show, untrack } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  createStore,
+  createUniqueId,
+  For,
+  Loading,
+  lazy,
+  onSettled,
+  Show,
+  untrack,
+} from "solid-js";
 import {
   agentFolderCalls,
   agentInstructionsCalls,
@@ -157,6 +223,7 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
     setActiveRightPanel,
     setBrowserPanelWidth,
     setSettingsPanelWidth,
+    settingsPanelWidth,
     handleRoutineSettingsRequest,
     sidebarFilePreview,
     settingsOpen,
@@ -197,7 +264,221 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
     movePanelThreadToChat,
     channel,
   } = useConversationViewScope();
-  const { t, errorMessage } = useText();
+  const { t, format, errorMessage } = useText();
+  const [centralTaskUi, setCentralTaskUi] = createStore<{
+    ownerId: string | undefined;
+    renaming: string | null;
+    name: string;
+  }>({ ownerId: undefined, renaming: null, name: "" });
+  createEffect(
+    () => props.agent?.id,
+    (ownerId) => {
+      setCentralTaskUi(() => ({ ownerId, renaming: null, name: "" }));
+    },
+  );
+  const [centralMonth, setCentralMonth] = createSignal<"current" | "previous">("current");
+  const centralPeriod = createMemo(() => {
+    const today = analyticsRange(props.agent?.id ?? "", 1);
+    const date = new Date(`${today.endDate}T12:00:00Z`);
+    const month = date.getUTCMonth() - (centralMonth() === "previous" ? 1 : 0);
+    const startDate = new Date(Date.UTC(date.getUTCFullYear(), month, 1)).toISOString().slice(0, 10);
+    const lastDate = new Date(Date.UTC(date.getUTCFullYear(), month + 1, 0)).toISOString().slice(0, 10);
+    return { ...today, startDate, endDate: centralMonth() === "previous" ? lastDate : today.endDate };
+  });
+  const [centralUsage, setCentralUsage] = createStore<{
+    agentId: string | undefined;
+    serverId: string;
+    rangeKey: string;
+    phase: "loading" | "ready" | "unsupported" | "error";
+    result: HostAnalytics | null;
+  }>({ agentId: undefined, serverId: LOCAL_SERVER_ID, rangeKey: "", phase: "loading", result: null });
+  createEffect(
+    () => ({
+      visible: activeRightPanel() === "central",
+      period: centralPeriod(),
+      agentId: props.agent?.id,
+      serverId: props.server?.id ?? LOCAL_SERVER_ID,
+      calls: props.usagePort ?? (props.runtime ? undefined : usagePort()),
+    }),
+    ({ visible, agentId, serverId, calls, period }) => {
+      if (!visible || !agentId) return;
+      let active = true;
+      let generation = 0;
+      const rangeKey = `${period.startDate}:${period.endDate}`;
+      setCentralUsage(() => ({ agentId, serverId, rangeKey, result: null, phase: calls ? "loading" : "unsupported" }));
+      const load = async (background = false) => {
+        if (!calls) return;
+        const request = ++generation;
+        try {
+          const result = await calls.agent.getHostAnalytics({ ...period, agentId }, serverId);
+          if (active && request === generation)
+            setCentralUsage(() => ({ agentId, serverId, rangeKey, result, phase: result ? "ready" : "unsupported" }));
+        } catch {
+          if (active && request === generation && !(background && centralUsage.result))
+            setCentralUsage(() => ({ agentId, serverId, rangeKey, result: null, phase: "error" }));
+        }
+      };
+      void load();
+      const unsubscribe = calls?.agent.onScopedEvent((event) => {
+        if (
+          event.serverId === serverId &&
+          ((event.event.type === "turn-completed" && event.event.agentId === agentId) ||
+            (event.event.type === "agent-tasks-changed" && event.event.snapshot.agentId === agentId))
+        )
+          void load(true);
+      });
+      return () => {
+        active = false;
+        unsubscribe?.();
+      };
+    },
+  );
+  const centralReport = () =>
+    centralUsage.agentId === props.agent?.id &&
+    centralUsage.serverId === (props.server?.id ?? LOCAL_SERVER_ID) &&
+    centralUsage.rangeKey === `${centralPeriod().startDate}:${centralPeriod().endDate}`
+      ? centralUsage.result
+      : null;
+  const centralActivity = createMemo(() => {
+    const report = centralReport();
+    const period = centralPeriod();
+    const start = new Date(`${period.startDate}T00:00:00Z`);
+    const count = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+    const daily = new Map(report?.daily.map((day) => [day.date, day]));
+    const days = Array.from({ length: count }, (_, index) => {
+      const time = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), index + 1));
+      const date = time.toISOString().slice(0, 10);
+      const day = daily.get(date);
+      return { date, weekday: time.getUTCDay(), tokens: day ? analyticsTokens(day) : 0, messages: 0 };
+    });
+    return {
+      days,
+      unavailable: new Set(
+        days
+          .filter((day) => {
+            const row = daily.get(day.date);
+            return !report || day.date > period.endDate || (row?.processedTokens === 0 && row.missingUsageTurns > 0);
+          })
+          .map((day) => day.date),
+      ),
+    };
+  });
+  const centralCompletedCount = () => centralReport()?.completedTasks ?? null;
+  const centralTokens = () => {
+    const report = centralReport();
+    return report && (report.totals.processedTokens > 0 || report.totals.missingUsageTurns === 0)
+      ? analyticsTokens(report.totals)
+      : null;
+  };
+  const collapsedSections = useCentralTaskSections();
+  const centralSectionsId = createUniqueId();
+  const centralTaskGroups = createMemo(() => {
+    const threads = props.threads;
+    const byId = new Map(threads?.tasks.map((task) => [task.id, task]));
+    const open =
+      threads?.header.threads.flatMap((thread) => {
+        const task = byId.get(thread.id);
+        return task ? [task] : [];
+      }) ?? [];
+    const completed = (task: AgentTask) => !isAgentTaskActive(task) && task.outcome === "completed";
+    return [
+      { id: "completed", label: "conversation.central.completedTasks", tasks: open.filter(completed) },
+      { id: "active", label: "conversation.central.inProgressTasks", tasks: open.filter((task) => !completed(task)) },
+      {
+        id: "archived",
+        label: "conversation.central.archivedTasks",
+        tasks:
+          threads?.header.archived.flatMap((thread) => {
+            const task = byId.get(thread.id);
+            return task ? [task] : [];
+          }) ?? [],
+      },
+    ] as const;
+  });
+  const centralStatus = createMemo(() => {
+    const agentId = props.agent?.id;
+    const wait = agentId ? props.agentWaits?.[agentId] : undefined;
+    if (wait?.kind === "limited") return { kind: "waiting", label: t("sidebar.state.usageLimit") };
+    const waitingThread = props.threads?.header.threads.find((thread) => thread.status.kind === "waiting");
+    const reason =
+      wait?.kind === "waiting"
+        ? wait.reason
+        : waitingThread?.status.kind === "waiting"
+          ? waitingThread.status.reason
+          : undefined;
+    if (reason)
+      return {
+        kind: "waiting",
+        label:
+          reason === "approval"
+            ? t("sidebar.state.waitingApproval")
+            : reason === "takeover"
+              ? t("sidebar.state.waitingTakeover")
+              : t("sidebar.state.waitingQuestion"),
+      };
+    if (props.activeTurnId || agentActivity() === "Working" || (props.threads?.running ?? 0) > 0)
+      return { kind: "working", label: t("conversation.central.statusRunning") };
+    if (props.threads?.tasks.some((task) => task.state === "queued"))
+      return { kind: "waiting", label: t("conversation.tasks.state.queued") };
+    if (props.agentStatus.phase === "starting" || props.agentStatus.phase === "restarting" || props.agentsConnecting)
+      return { kind: "starting", label: t("conversation.central.statusStarting") };
+    if (props.agentStatus.phase === "ready" && props.agentStatus.capabilities.chat === "ready")
+      return { kind: "ready", label: t("conversation.central.statusReady") };
+    return { kind: "unavailable", label: t("conversation.central.statusUnavailable") };
+  });
+  const openCentralMain = () => {
+    props.threads?.header.onOpen(MAIN_THREAD_ID);
+    queueMicrotask(() => controller.setComposerFocusRequest((value) => value + 1));
+    if (props.loaded && props.unreadCount > 0)
+      void props.onMarkRead().catch(() => actionToast.error(t("chat.unread.markReadFailed")));
+  };
+  const centralTaskThread = (taskId: string) =>
+    [...(props.threads?.header.threads ?? []), ...(props.threads?.header.archived ?? [])].find(
+      (thread) => thread.id === taskId,
+    );
+  const centralTaskMark = (task: AgentTask): TaskMarkState => {
+    const status = centralTaskThread(task.id)?.status.kind;
+    if (status === "working") return "active";
+    if (status === "failed") return "failed";
+    return status === "idle" && task.outcome === "completed" ? "done" : "pending";
+  };
+  const centralTaskWaitReason = (taskId: string) => {
+    const status = centralTaskThread(taskId)?.status;
+    return status?.kind === "waiting" ? status.reason : undefined;
+  };
+  const centralTaskWait = (taskId: string): AgentTaskWait => {
+    const status = props.threads?.header.threads.find((thread) => thread.id === taskId)?.status;
+    return status?.kind === "waiting" ? (status.reason === "approval" ? "approval" : "answer") : undefined;
+  };
+  function startCentralRename(task: AgentTask) {
+    setCentralTaskUi((state) => {
+      state.ownerId = task.agentId;
+      state.renaming = task.id;
+      state.name = task.title;
+    });
+  }
+  function finishCentralRename(value: string | null) {
+    const id = centralTaskUi.renaming;
+    const ownerId = centralTaskUi.ownerId;
+    setCentralTaskUi((state) => {
+      state.renaming = null;
+    });
+    const title = value?.trim();
+    if (
+      id &&
+      title &&
+      ownerId === props.agent?.id &&
+      props.threads?.tasks.find((task) => task.id === id)?.title !== title
+    )
+      props.threads?.header.onRename?.(id, title);
+  }
+  function openCentralTask(task: AgentTask) {
+    if (task.state === "closed") {
+      props.threads?.header.onRestore(task.id);
+    } else {
+      props.threads?.side.onToChat(task.id);
+    }
+  }
   /** The web client asks the host. Desktop asks main, which asks a joined server's host. */
   const publishCalls = (): AgentTemplatePublishCalls => {
     if (props.runtime?.admin) return props.runtime.admin.agentTemplates;
@@ -311,6 +592,7 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
   let browserPreviewTrigger: HTMLButtonElement | undefined;
   /** The panes this chat can open. The web client has no Files pane, and a chat without a thread has no files. */
   const sidePanelPanes = createMemo((): SidePanelPane[] => [
+    ...(props.agent && !channel ? (["central"] as const) : []),
     // A channel turn's takeover still shows as a card; the pane belongs to one agent's browser.
     ...(props.browserEnabled !== false && !channel ? (["browser"] as const) : []),
     ...(!props.runtime && props.agent?.threadId && serverHasStorage(props.server) ? (["files"] as const) : []),
@@ -406,6 +688,18 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
     <>
       <HostFolderPicker request={folderPick()} browse={browsePickFolders} onDone={finishFolderPick} />
       <Show when={sidePanelOpen()}>
+        <PanelResizer
+          class="right-panel-resizer side-panel-resizer"
+          label={t("settings.panel.resize")}
+          controls="conversation-side-panel-tabs"
+          direction="right"
+          value={settingsPanelWidth()}
+          defaultValue={SETTINGS_PANEL_DEFAULT}
+          min={SETTINGS_PANEL_DEFAULT}
+          max={settingsMaxWidth}
+          onResize={setSettingsPanelWidth}
+          onResizeEnd={(width) => savePanelWidth("openbot:side-panel-width", width)}
+        />
         <SidePanelHeader
           panes={sidePanel().panes}
           selected={selectedPane()}
@@ -449,6 +743,370 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
         </aside>
       </Show>
 
+      <Show when={activeRightPanel() === "central" && props.agent}>
+        {(agent) => (
+          <SettingsPanel
+            id="agent-central-panel"
+            label={t("conversation.sidePanel.pane.central")}
+            width={settingsPanelWidth()}
+            maxWidth={settingsMaxWidth}
+            onResize={setSettingsPanelWidth}
+            onResizeEnd={setSettingsPanelWidth}
+          >
+            <SettingsPanelHeader
+              title={t("conversation.sidePanel.pane.central")}
+              paneRoot
+              closeLabel={t("conversation.sidePanel.close")}
+              onClose={() => closeSidePanelPane("central")}
+            />
+            <SettingsPanelContent>
+              <div class="agent-central-content">
+                <header class="agent-central-profile">
+                  <Button
+                    variant="ghost"
+                    class="agent-central-avatar-button"
+                    aria-label={t("conversation.header.mainChat")}
+                    title={t("conversation.header.mainChat")}
+                    onClick={openCentralMain}
+                  >
+                    <AgentAvatar agent={agent()} class="agent-central-avatar" />
+                  </Button>
+                  <div class="agent-central-identity">
+                    <div class="agent-central-name-row">
+                      <h2 title={agent().name}>{agent().name}</h2>
+                      <Badge
+                        variant="outline"
+                        role="status"
+                        class="agent-central-status"
+                        data-state={centralStatus().kind}
+                        title={centralStatus().label}
+                      >
+                        <span class="agent-central-status-dot" aria-hidden="true" />
+                        <span>{centralStatus().label}</span>
+                      </Badge>
+                    </div>
+                    <Show when={agent().title}>{(title) => <p>{title()}</p>}</Show>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="agent-central-profile-settings"
+                    aria-label={t("conversation.sidePanel.pane.settings")}
+                    title={t("conversation.sidePanel.pane.settings")}
+                    onClick={() => openSidePanelPane("settings")}
+                  >
+                    <Settings aria-hidden="true" />
+                  </Button>
+                </header>
+                <section class="agent-central-usage" aria-label={t("conversation.central.overview")}>
+                  <header class="agent-central-section-header">
+                    <h3>
+                      {format.date(new Date(`${centralPeriod().startDate}T12:00:00Z`), {
+                        month: "long",
+                        year: "numeric",
+                        timeZone: "UTC",
+                      })}
+                    </h3>
+                    <div class="agent-central-period-actions">
+                      <Select<"current" | "previous">
+                        class="agent-central-month-select"
+                        options={["current", "previous"]}
+                        value={centralMonth()}
+                        onChange={(value) => {
+                          if (value) setCentralMonth(value);
+                        }}
+                        itemComponent={(itemProps) => (
+                          <SelectItem item={itemProps.item}>
+                            {itemProps.item.rawValue === "current"
+                              ? t("conversation.central.currentMonth")
+                              : t("conversation.central.previousMonth")}
+                          </SelectItem>
+                        )}
+                      >
+                        <SelectTrigger size="sm" aria-label={t("usage.panel.period")}>
+                          <SelectValue<"current" | "previous">>
+                            {(selection) =>
+                              selection.selectedOption() === "current"
+                                ? t("conversation.central.currentMonth")
+                                : t("conversation.central.previousMonth")
+                            }
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent />
+                      </Select>
+                      <Show when={panelProps.onOpenUsage}>
+                        {(open) => (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t("usage.summary")}
+                            title={t("usage.summary")}
+                            onClick={(event) => open()(event.currentTarget)}
+                          >
+                            <ExternalLink aria-hidden="true" />
+                          </Button>
+                        )}
+                      </Show>
+                    </div>
+                  </header>
+                  <dl class="agent-central-metrics" aria-busy={centralUsage.phase === "loading" ? "true" : "false"}>
+                    <div class="agent-central-metric">
+                      <dt>{t("conversation.central.activity")}</dt>
+                      <dd class="agent-central-heatmap">
+                        <ProfileHeatmap
+                          days={centralActivity().days}
+                          compact
+                          compactRows={sidePanel().maximized || settingsPanelWidth() >= 600 ? 2 : 3}
+                          unavailableDates={centralActivity().unavailable}
+                          label={t("conversation.central.activity")}
+                        />
+                      </dd>
+                    </div>
+                    <div class="agent-central-metric">
+                      <dt>{t("conversation.central.tokens")}</dt>
+                      <dd
+                        title={centralTokens() === null ? t("usage.unavailable") : format.number(centralTokens() ?? 0)}
+                      >
+                        {centralTokens() === null ? "–" : usageCompact(centralTokens())}
+                      </dd>
+                    </div>
+                    <div class="agent-central-metric">
+                      <dt>{t("conversation.central.finishedTasks")}</dt>
+                      <dd title={t("conversation.central.finishedHint")}>
+                        {centralCompletedCount() === null ? "–" : format.number(centralCompletedCount() ?? 0)}
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+                <Show when={props.threads}>
+                  {(threads) => (
+                    <section class="agent-central-tasks" aria-label={t("conversation.tasks.title")}>
+                      <header class="agent-central-section-header">
+                        <h3>{t("conversation.tasks.title")}</h3>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={!threads().header.canStartNew}
+                          onClick={() => threads().header.onNew()}
+                        >
+                          <Plus aria-hidden="true" />
+                          {t("conversation.central.newTask")}
+                        </Button>
+                      </header>
+                      <For each={centralTaskGroups()} keyed={(group) => group.id}>
+                        {(group) => (
+                          <section
+                            class="agent-central-task-group"
+                            aria-labelledby={`${centralSectionsId}-${group().id}-heading`}
+                          >
+                            <h4 id={`${centralSectionsId}-${group().id}-heading`}>
+                              <Button
+                                variant="ghost"
+                                class="agent-central-group-toggle"
+                                aria-label={t(group().label)}
+                                aria-expanded={collapsedSections[group().id] ? "false" : "true"}
+                                aria-controls={`${centralSectionsId}-${group().id}-items`}
+                                onClick={() =>
+                                  setCentralTaskSectionCollapsed(group().id, !collapsedSections[group().id])
+                                }
+                              >
+                                <ChevronDown class="agent-central-group-chevron" aria-hidden="true" />
+                                <span>{t(group().label)}</span>
+                                <span class="agent-central-group-count">{format.number(group().tasks.length)}</span>
+                              </Button>
+                            </h4>
+                            <div id={`${centralSectionsId}-${group().id}-items`} hidden={collapsedSections[group().id]}>
+                              <Show when={!collapsedSections[group().id]}>
+                                <Show
+                                  when={group().tasks.length > 0}
+                                  fallback={<p>{t("conversation.central.emptySection")}</p>}
+                                >
+                                  <ul class="agent-central-task-list">
+                                    <For each={group().tasks}>
+                                      {(task) => (
+                                        <li class="agent-central-task-row">
+                                          <Show
+                                            when={centralTaskUi.renaming === task.id}
+                                            fallback={
+                                              <>
+                                                <Button
+                                                  variant="ghost"
+                                                  class="sidebar-agent-thread-button agent-central-task-main"
+                                                  title={task.title}
+                                                  aria-pressed={
+                                                    threads().header.activeId === task.id ? "true" : "false"
+                                                  }
+                                                  data-attention={threadAttention(
+                                                    centralTaskThread(task.id)?.status ?? { kind: "idle" },
+                                                  )}
+                                                  aria-label={`${t("conversation.tasks.page.row", {
+                                                    title: task.title,
+                                                    agent: agent().name,
+                                                    status: agentTaskStatus(task, t, centralTaskWait(task.id)),
+                                                  })}${(centralTaskThread(task.id)?.unread ?? 0) > 0 ? `. ${t("sidebar.state.unread", { count: centralTaskThread(task.id)?.unread ?? 0 })}` : ""}`}
+                                                  onPointerDown={(event) =>
+                                                    startTaskTransfer(
+                                                      event,
+                                                      threads().header.taskTransfer,
+                                                      centralTaskThread(task.id),
+                                                    )
+                                                  }
+                                                  onClick={() => openCentralTask(task)}
+                                                >
+                                                  <span
+                                                    class="sidebar-agent-thread-icon sidebar-agent-task-status"
+                                                    data-status={centralTaskThread(task.id)?.status.kind}
+                                                    aria-hidden="true"
+                                                  >
+                                                    <Show
+                                                      when={centralTaskWaitReason(task.id)}
+                                                      fallback={<TaskMark state={centralTaskMark(task)} />}
+                                                    >
+                                                      {(reason) => <SidebarWaitIcon reason={reason()} />}
+                                                    </Show>
+                                                  </span>
+                                                  <ThreadTitle class="sidebar-agent-thread-title" title={task.title} />
+                                                  <Show when={(centralTaskThread(task.id)?.unread ?? 0) > 0}>
+                                                    <span class="sidebar-agent-thread-icon" aria-hidden="true">
+                                                      <span class="agent-threads-state agent-threads-unread" />
+                                                    </span>
+                                                  </Show>
+                                                  <time
+                                                    class="agent-central-task-date"
+                                                    datetime={task.updatedAt}
+                                                    title={format.date(new Date(task.updatedAt), {
+                                                      dateStyle: "medium",
+                                                      timeStyle: "short",
+                                                    })}
+                                                  >
+                                                    {sidebarMessageTime(task.updatedAt, format)}
+                                                  </time>
+                                                </Button>
+                                                <DropdownMenu.Root placement="bottom-end">
+                                                  <DropdownMenu.Trigger
+                                                    class={buttonVariants({
+                                                      variant: "ghost",
+                                                      size: "icon-sm",
+                                                      class: "agent-central-task-actions",
+                                                    })}
+                                                    aria-label={t("conversation.central.taskActions", {
+                                                      title: task.title,
+                                                    })}
+                                                  >
+                                                    <Ellipsis aria-hidden="true" />
+                                                  </DropdownMenu.Trigger>
+                                                  <DropdownMenu.Portal>
+                                                    <DropdownMenu.Content
+                                                      class="agent-threads-tab-menu"
+                                                      aria-label={t("conversation.threads.actions")}
+                                                    >
+                                                      <Show when={task.state !== "closed"}>
+                                                        <DropdownMenu.Item onSelect={() => openCentralTask(task)}>
+                                                          <MessageSquare
+                                                            class="agent-context-icon size-4"
+                                                            aria-hidden="true"
+                                                          />
+                                                          <span>{t("common.open")}</span>
+                                                        </DropdownMenu.Item>
+                                                        <Show when={threads().header.onRename}>
+                                                          <DropdownMenu.Item
+                                                            onSelectAfterClose={() => startCentralRename(task)}
+                                                          >
+                                                            <PencilLine
+                                                              class="agent-context-icon size-4"
+                                                              aria-hidden="true"
+                                                            />
+                                                            <span>{t("common.rename")}</span>
+                                                          </DropdownMenu.Item>
+                                                        </Show>
+                                                        <DropdownMenu.Separator />
+                                                        <DropdownMenu.Item
+                                                          disabled={task.state === "running"}
+                                                          onSelect={() => threads().header.onArchive(task.id)}
+                                                        >
+                                                          <Archive
+                                                            class="agent-context-icon size-4"
+                                                            aria-hidden="true"
+                                                          />
+                                                          <span>{t("conversation.threads.archive")}</span>
+                                                        </DropdownMenu.Item>
+                                                      </Show>
+                                                      <Show when={task.state === "closed"}>
+                                                        <DropdownMenu.Item onSelect={() => openCentralTask(task)}>
+                                                          <ArchiveRestore
+                                                            class="agent-context-icon size-4"
+                                                            aria-hidden="true"
+                                                          />
+                                                          <span>{t("conversation.threads.restore")}</span>
+                                                        </DropdownMenu.Item>
+                                                      </Show>
+                                                      <Show when={threads().header.onDelete}>
+                                                        <DropdownMenu.Item
+                                                          class="ui-action-menu-danger"
+                                                          disabled={isAgentTaskActive(task)}
+                                                          onSelect={() => threads().header.onDelete?.(task.id)}
+                                                        >
+                                                          <Trash2
+                                                            class="agent-context-icon size-4"
+                                                            aria-hidden="true"
+                                                          />
+                                                          <span>{t("common.delete")}</span>
+                                                        </DropdownMenu.Item>
+                                                      </Show>
+                                                    </DropdownMenu.Content>
+                                                  </DropdownMenu.Portal>
+                                                </DropdownMenu.Root>
+                                              </>
+                                            }
+                                          >
+                                            <Input
+                                              size="sm"
+                                              value={centralTaskUi.name}
+                                              aria-label={t("conversation.threads.name")}
+                                              maxlength={INPUT_LIMITS.agentTaskTitle}
+                                              ref={(field: HTMLInputElement) =>
+                                                requestAnimationFrame(() => {
+                                                  field.focus();
+                                                  field.select();
+                                                })
+                                              }
+                                              onInput={(event) =>
+                                                setCentralTaskUi((state) => {
+                                                  state.name = event.currentTarget.value;
+                                                })
+                                              }
+                                              onKeyDown={(event) => {
+                                                if (event.key === "Enter") {
+                                                  event.preventDefault();
+                                                  finishCentralRename(event.currentTarget.value);
+                                                } else if (event.key === "Escape") {
+                                                  event.preventDefault();
+                                                  event.stopPropagation();
+                                                  finishCentralRename(null);
+                                                }
+                                              }}
+                                              onBlur={(event) => finishCentralRename(event.currentTarget.value)}
+                                            />
+                                          </Show>
+                                        </li>
+                                      )}
+                                    </For>
+                                  </ul>
+                                </Show>
+                              </Show>
+                            </div>
+                          </section>
+                        )}
+                      </For>
+                    </section>
+                  )}
+                </Show>
+              </div>
+            </SettingsPanelContent>
+          </SettingsPanel>
+        )}
+      </Show>
+
       <Show when={filePreviewOpen() && sidebarFilePreview()}>
         {(file) => {
           const attached = () => {
@@ -475,6 +1133,7 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
                     ),
                   )
                 }
+                width={settingsPanelWidth()}
                 onWidthChange={setBrowserPanelWidth}
                 onOpenLink={(url) => void openExternalMessageUrl(url)}
                 onOpenSharedFile={(path) => openSharedFile(path, "here")}
@@ -595,6 +1254,7 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
               ),
             )
           }
+          width={settingsPanelWidth()}
           onWidthChange={setBrowserPanelWidth}
           capturePreview={props.runtime?.browser.capturePreview}
           onOpenTab={(tabId, trigger) => {
@@ -617,6 +1277,7 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
       {channel ? (
         <Show when={settingsOpen()}>
           <channel.SettingsPane
+            width={settingsPanelWidth()}
             maxWidth={settingsMaxWidth}
             onWidthChange={setSettingsPanelWidth}
             onClose={() => closeSidePanelPane("settings")}
@@ -665,6 +1326,7 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
               fastMode={fastMode()}
               onFastModeChange={fastModeChange()}
               taskLimitEditable={props.server?.kind === "local" || props.remoteTaskLimitLoaded === true}
+              taskLimitMax={serverSupportsCapability(props.server, "agent-task-limit-v2") ? 10 : 4}
               backupModelsEditable={props.server?.kind === "local" || props.remoteBackupModelsLoaded === true}
               usageLimited={props.usageLimited}
               providerFailed={props.providerFailed}
@@ -728,6 +1390,7 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
               }
               modelOptions={props.modelOptions}
               working={agentActivity() === "Working"}
+              width={settingsPanelWidth()}
               maxWidth={settingsMaxWidth}
               onClose={() => closeSidePanelPane("settings")}
               onWidthChange={setSettingsPanelWidth}

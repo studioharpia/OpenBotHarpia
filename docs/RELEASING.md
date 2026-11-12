@@ -759,9 +759,23 @@ The macOS ZIP must be smaller than 800,000,000 bytes and smaller than the offici
 Do not publish when either size gate fails, the `0.1.21` canary update crashes, or Windows starts NSIS
 during shutdown or sign-out.
 
-The unsigned local macOS package is a development artifact. It does not prove Gatekeeper,
-notarization, or auto-update readiness. Those are proven only by the signed release workflow's
-`codesign`, `spctl`, and `stapler` checks.
+Local macOS packages are development artifacts, signed with an existing Apple Development or
+Developer ID Application certificate. `package` and `dist:mac` use `scripts/package-macos-local.ts`;
+if more than one Apple signing identity is installed, select one with `CSC_NAME` (name or SHA-1).
+The command refuses ad hoc signing, signs two disposable executables first, and checks that the
+second meets the first's designated requirement. `--check` runs only this preflight, without a build
+or install. The final bundle must satisfy the same requirement. Local packages use `--timestamp=none` to avoid
+serial timestamp-authority requests while retaining the certificate identity and strict signature checks.
+This does not change the notarized release workflow. Keep the certificate identity,
+`app.openbot.desktop` bundle identifier and installation path stable across local updates.
+
+Ad hoc signing binds the designated requirement to one code hash. Replacing that app can invalidate
+Keychain and privacy grants even if its visible name is unchanged. The first transition from an ad hoc
+app to a certificate-backed app may still need a one-time native grant; this process never resets TCC,
+changes Keychain ACLs or bypasses macOS prompts. Existing profiles and encrypted secrets are preserved.
+
+Local signing does not prove Gatekeeper, notarization or auto-update readiness. Those are proven
+only by the signed release workflow's `codesign`, `spctl`, and `stapler` checks.
 
 After publishing `v0.1.0`, keep one installed copy and use the first signed patch (`v0.1.1`) as the
 end-to-end updater acceptance test: check, download, restart, and confirm the version changed without

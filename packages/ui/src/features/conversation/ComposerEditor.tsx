@@ -3,7 +3,7 @@ import { attachmentReferenceIds } from "@openbot/contracts/attachment-references
 import { EVERYONE_MENTION, serializeChatTagReference } from "@openbot/contracts/chat-tag-references";
 import { INPUT_LIMITS } from "@openbot/contracts/input-limits";
 import type { DraftAttachment } from "@openbot/contracts/ipc";
-import { AppWindow, Badge, Blocks, Listbox, Puzzle, Split, UsersRound } from "@openbot/ui";
+import { AppWindow, Badge, Blocks, FileText, Listbox, Puzzle, Split, UsersRound } from "@openbot/ui";
 import { usesTouchLayout } from "@openbot/ui/utils";
 import { Dynamic, Portal } from "@solidjs/web";
 import {
@@ -16,10 +16,12 @@ import {
   onSettled,
   Show,
   untrack,
+  useContext,
 } from "solid-js";
 import type { ComposerAgent, ComposerBrowserTab, ComposerMcpServer, ComposerSkill, ComposerThread } from "../../data";
 import { useText } from "../../text";
 import { AgentAvatar } from "../agents/AgentAvatar";
+import { ComposerTemplatesContext } from "../templates/composer-templates";
 import { AnchoredTooltip } from "./AnchoredTooltip";
 import { AttachmentReferenceVisual } from "./AttachmentReference";
 import {
@@ -100,6 +102,8 @@ interface ComposerEditorProps {
   /** `compact` is one short line, as in the floating composer over a browser page. */
   size?: "default" | "compact";
   focusRequest?: number | undefined;
+  /** The visible conversation identity. Navigation focuses it once, without reacting to new messages. */
+  focusOnOpen?: string | undefined;
   /** Raised by one to open the skill picker at the caret, as a typed `$` does. */
   skillPickerRequest?: number;
   /** A new id puts a quote chip for the text at the caret, or at the end when the caret is unknown. */
@@ -168,7 +172,7 @@ interface MentionContext {
   query: string;
   start: number;
   end: number;
-  trigger: "@" | "$";
+  trigger: "@" | "$" | "/";
 }
 
 const DICTATION_INTERIM_WORDS = 2;
@@ -186,6 +190,7 @@ export function expandComposerMentions(value: string): string {
 
 export function ComposerEditor(props: ComposerEditorProps) {
   const { t, format } = useText();
+  const templates = useContext(ComposerTemplatesContext);
   const [mention, setMention] = createSignal<MentionContext | null>(null);
   const [activeOption, setActiveOption] = createSignal(0);
   /* Where the `$` that the add menu wrote starts, so that picker can say why it is empty. */
@@ -278,6 +283,18 @@ export function ComposerEditor(props: ComposerEditorProps) {
           ],
         },
       ].filter((section) => section.options.length > 0);
+    if (trigger === "/") {
+      const query = mention()?.query.trim().toLocaleLowerCase() ?? "";
+      return [
+        {
+          id: "templates",
+          title: null,
+          options: (templates?.() ?? [])
+            .filter((item) => !query || item.name.toLocaleLowerCase().includes(query))
+            .map((template) => ({ type: "template" as const, template })),
+        },
+      ].filter((section) => section.options.length > 0);
+    }
     if (trigger !== "@") return [];
     const sections: PickerSection[] = [
       {
@@ -318,6 +335,7 @@ export function ComposerEditor(props: ComposerEditorProps) {
    */
   const pickerStatus = createMemo(() => {
     const context = mention();
+    if (context?.trigger === "/" && matchingOptions().length === 0) return t("composer.templates.noMatch");
     if (context?.trigger !== "$" || matchingOptions().length > 0) return null;
     if (requestedMentionStart() !== context.start && context.query.trim()) return null;
     if (usableSkills().length === 0)
@@ -355,6 +373,8 @@ export function ComposerEditor(props: ComposerEditorProps) {
   let lastReferenceKey = "";
   let lastEmittedValue = "";
   let lastFocusRequest = 0;
+  let openedFocusKey: string | undefined;
+  let openFocusRevision = 0;
   let lastSkillPickerRequest = 0;
   // A request made before this editor existed belongs to an earlier one, which inserted it.
   let lastQuoteRequest = untrack(() => props.quoteRequest?.id ?? 0);
@@ -507,6 +527,31 @@ export function ComposerEditor(props: ComposerEditorProps) {
     },
   );
 
+  createEffect(
+    () => ({ key: props.focusOnOpen, disabled: props.disabled }),
+    ({ key, disabled }) => {
+      const revision = ++openFocusRevision;
+      if (key === undefined) {
+        openedFocusKey = undefined;
+        return;
+      }
+      if (disabled || key === openedFocusKey) return;
+      onSettled(() => {
+        queueMicrotask(() => {
+          if (revision !== openFocusRevision) return;
+          openedFocusKey = key;
+          if (usesTouchLayout() || !editor || !shouldRestoreComposerFocus(editor, true)) return;
+          editor.focus({ preventScroll: true });
+          placeCaretAtEnd(editor);
+          scheduleCaretScroll();
+        });
+      });
+    },
+  );
+  onSettled(() => () => {
+    openFocusRevision += 1;
+  });
+
   /*
    * Live dictation continues the draft's last line, where the final text lands, so nothing moves
    * when the recording finishes. The editor's text offsets and serializer must never see these
@@ -656,9 +701,12 @@ export function ComposerEditor(props: ComposerEditorProps) {
     const selection = readEditorSelection(editor);
     if (!selection || selection.anchor !== selection.focus) return null;
     const beforeCaret = editorText(editor).slice(0, selection.focus);
-    const match = beforeCaret.match(/(?:^|\s)([@$])([^@$\n\uFFFC]{0,60})$/u);
-    if (!match) return null;
-    const trigger = match[1] === "$" ? "$" : "@";
+    const match =
+      beforeCaret.match(/(?:^|\s)([@$])([^@$\n\uFFFC]{0,60})$/u) ??
+      beforeCaret.match(/(?:^|\s)([/])([^/\n\uFFFC]{0,60})$/u);
+    if (!match || (match[1] === "/" && !templates)) return null;
+    const trigger = match[1] === "/" ? "/" : match[1] === "$" ? "$" : "@";
+    if (trigger === "/" && beforeCaret.slice(0, beforeCaret.length - (match[2]?.length ?? 0) - 1).trim()) return null;
     const query = match[2] ?? "";
     return { query, start: beforeCaret.length - query.length - 1, end: beforeCaret.length, trigger };
   }
@@ -701,6 +749,15 @@ export function ComposerEditor(props: ComposerEditorProps) {
   function insertOption(option: PickerOption) {
     const context = mention();
     if (!editor || !context) return;
+    if (option.type === "template") {
+      // The first Enter selects only. A subsequent, separate Enter follows the normal send shortcut.
+      renderEditorValue(editor, option.template.prompt, tagSources(), attachmentTokenActions);
+      placeCaretAtEnd(editor);
+      setMention(null);
+      emitValue();
+      editor.focus({ preventScroll: true });
+      return;
+    }
     const range = rangeFromTextOffsets(editor, context.start, context.end);
     if (!range) return;
     range.deleteContents();
@@ -789,6 +846,8 @@ export function ComposerEditor(props: ComposerEditorProps) {
     });
   }
 
+  let templateEnterHeld = false;
+
   function handleMentionPickerKeyDown(event: KeyboardEvent): boolean {
     const context = mention();
     if (!context) return false;
@@ -804,7 +863,13 @@ export function ComposerEditor(props: ComposerEditorProps) {
       setMention(null);
       return true;
     }
-    if (options.length === 0) return false;
+    if (options.length === 0) {
+      if (context.trigger === "/" && event.key === "Enter") {
+        event.preventDefault();
+        return true;
+      }
+      return false;
+    }
     if (event.key === "ArrowDown") {
       event.preventDefault();
       moveActiveOption(1, options.length);
@@ -818,7 +883,10 @@ export function ComposerEditor(props: ComposerEditorProps) {
     if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
       event.preventDefault();
       const option = options[activeOption()];
-      if (option) insertOption(option);
+      if (option) {
+        templateEnterHeld = option.type === "template" && event.key === "Enter";
+        insertOption(option);
+      }
       return true;
     }
     return false;
@@ -864,6 +932,10 @@ export function ComposerEditor(props: ComposerEditorProps) {
   }
 
   function handleKeyDown(event: KeyboardEvent) {
+    if (templateEnterHeld && event.key === "Enter" && event.repeat) {
+      event.preventDefault();
+      return;
+    }
     if (props.disabled) return;
     const sendShortcut: SendShortcut = props.sendShortcut ?? "enter";
     /*
@@ -1053,6 +1125,9 @@ export function ComposerEditor(props: ComposerEditorProps) {
         }}
         onClick={handleEditorClick}
         onKeyDown={handleKeyDown}
+        onKeyUp={(event) => {
+          if (event.key === "Enter") templateEnterHeld = false;
+        }}
         onBeforeInput={handleBeforeInput}
         onCompositionStart={() => {
           isComposing = true;
@@ -1136,7 +1211,11 @@ export function ComposerEditor(props: ComposerEditorProps) {
                 ref={bindPickerList}
                 class="mention-picker-list"
                 aria-label={t(
-                  mention()?.trigger === "$" ? "composer.picker.skillLabel" : "composer.picker.mentionLabel",
+                  mention()?.trigger === "/"
+                    ? "composer.templates.list"
+                    : mention()?.trigger === "$"
+                      ? "composer.picker.skillLabel"
+                      : "composer.picker.mentionLabel",
                 )}
                 options={pickerSections()}
                 optionGroupChildren="options"
@@ -1198,6 +1277,10 @@ export function ComposerEditor(props: ComposerEditorProps) {
                       ) : option.type === "everyone" ? (
                         <span class="mention-picker-skill-icon" aria-hidden="true">
                           <UsersRound />
+                        </span>
+                      ) : option.type === "template" ? (
+                        <span class="mention-picker-skill-icon" aria-hidden="true">
+                          <FileText />
                         </span>
                       ) : option.type === "skill" ? (
                         <span class="mention-picker-skill-icon" aria-hidden="true">

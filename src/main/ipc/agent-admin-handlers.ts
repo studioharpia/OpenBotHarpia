@@ -1,3 +1,7 @@
+import {
+  AGENT_TASK_LIMIT_V2_CAPABILITY,
+  AGENT_TASK_LIMIT_V2_ROUTES,
+} from "@openbot/contracts/team-protocol/agent-task-limit-v2";
 import type { Effect } from "effect";
 import type { RemoteWorkflowError } from "../remote-service-effects";
 // Access, auto-approve and skills of one agent, and adding an agent from the marketplace or a
@@ -401,8 +405,13 @@ export function agentAdminIpcHandlers({
   function remoteTaskLimit(serverId: string, path: string, body: unknown) {
     if (!remoteServers.supportsCapability(serverId, AGENT_TASK_LIMIT_CAPABILITY))
       throw new Error(sourceText("error.team.agentSettingsUnsupported"));
+    const route = remoteServers.supportsCapability(serverId, AGENT_TASK_LIMIT_V2_CAPABILITY)
+      ? path === AGENT_TASK_LIMIT_ROUTES.settings
+        ? AGENT_TASK_LIMIT_V2_ROUTES.settings
+        : AGENT_TASK_LIMIT_V2_ROUTES.update
+      : path;
     return runCauseEffect(
-      remoteServers.request(serverId, path, decodeAgentTaskLimitSettings, { method: "POST", body }),
+      remoteServers.request(serverId, route, decodeAgentTaskLimitSettings, { method: "POST", body }),
     );
   }
 

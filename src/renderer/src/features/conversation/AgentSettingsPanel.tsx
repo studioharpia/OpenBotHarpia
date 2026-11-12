@@ -63,6 +63,7 @@ interface AgentSettingsPanelProps
   adminCalls?: ConversationRuntime["admin"] | undefined;
   onPublish?: (() => void) | undefined;
   onOpenUsage?: ((trigger: HTMLButtonElement) => void) | undefined;
+  width?: number | undefined;
   onWidthChange: (width: number) => void;
   skillSelectionRequest?: { skillId: string } | null | undefined;
   /** The instruction file in the agent's workspace. Local-only: the Team API does not carry it. */
@@ -241,7 +242,7 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
   createEffect(
     () => panelWidth(),
     (width) => {
-      props.onWidthChange(width);
+      if (props.width === undefined) props.onWidthChange(width);
     },
   );
 
@@ -453,7 +454,7 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
       {...props}
       browserProfiles={browserProfileOptions()}
       notificationLevel={notificationLevelOptions()}
-      width={panelWidth()}
+      width={props.width ?? panelWidth()}
       onResize={setPanelWidth}
       onResizeEnd={saveSettingsPanelWidth}
       onUnshownSaveError={(message) =>

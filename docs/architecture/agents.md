@@ -446,6 +446,16 @@ folder hides the folders in it. With the capability, its folder menu has "New fo
 "Move to" (`nest`). An instance transfer creates each folder at the top level, because its
 file has no field for the parent.
 
+## Side-thread message actions
+
+`agent-thread-message-actions-v1` adds rewind-to-message and user reactions for side threads without
+changing the monotonic `agent-thread-reads-v1` routes. The host validates agent/task/message ownership
+and chooses the authenticated reader. Desktop and web gate these actions by capability. A manual
+unread mark stays held while the task remains visible; leaving releases the automatic-read hold,
+and returning to the focused task can move the read cursor again. Read writes are serialized per
+task, so an older automatic read cannot erase a newer manual mark. The task message menu reuses the
+same Reply/Copy/React/Send to channel/Branch/Mark unread/Delete controls as the main conversation.
+
 ## Browser profile
 
 Agent settings > Advanced selects the browser profile of an agent: Shared or a named profile
@@ -473,8 +483,10 @@ of a side thread is `legacy_task_id ?? thread_id`, so a stored mailbox message a
 that name the task still find it. A mailbox message with a `taskId` belongs to that side thread, and `DrainScheduler` drains each task as its own lane. The main chat
 lane does not count toward the task limit. At most `limit` task turns of one agent run at the same
 time. `agentTaskLimit` gives the limit: the agent's local `taskLimit` setting (1 to
-`AGENT_TASK_LIMIT_MAX`, in `agent_json`), else `AGENT_TASK_LIMIT_DEFAULT` (4). An owner or admin of
-a joined server reads and sets it on `agent-task-limit-v1`. A provider whose
+`AGENT_TASK_LIMIT_MAX` (10), in `agent_json`), else `AGENT_TASK_LIMIT_DEFAULT` (4). An owner or admin of
+a joined server reads and sets it on `agent-task-limit-v2` when negotiated on protocol 9. Its settings,
+list and event expose 1–10; permanent v1 adapters keep their released 1–4 bounds and project larger
+host limits as 4. Current clients offer 1–10 locally or on a v2 host, and 1–4 on legacy hosts. A provider whose
 descriptor has `concurrentTurns: false` (custom ACP agents) gets 1, and its chat and tasks run one
 turn at a time. Other task messages wait with a `hold` reason: `task-limit`, `agent-restarting`,
 `usage-limit`, `server-busy`, `agent-busy` or `one-turn`. The server-wide `TurnSlots` limit of a
@@ -522,11 +534,13 @@ each branch under its source. The branch has no provider session, so its first t
 its own transcript, with a note that workspace files were not rolled back. A branch counts toward the
 open-thread limit.
 
-The agent starts a side thread with the `start_task` OpenBot tool, up to 8 open tasks. On desktop and
+The agent starts a side thread with the `start_task` OpenBot tool. Its unfinished-task guard is
+the larger of 8 and the agent's effective parallel limit, so configured 9 or 10 also work through
+the tool; the default guard remains 8. On desktop and
 the web, it opens as a tab of the agent and does not take focus. An agent has at most 50
 open tasks (`INPUT_LIMITS.agentTasks`, the size of the task list), so each open task stays visible. A message to a
-running task waits in the task, or steers the turn when the agent's busy-message mode is "steer"
-and the provider steers natively, as in the main chat. Stop interrupts the task turn; close moves
+running task follows the agent's busy-message mode unless the person explicitly chooses a
+per-message intent on a `message-delivery-v1` host. A supported steer keeps the task's existing provider session. Stop interrupts the task turn; close moves
 the task to "Closed" on the phone and to "Archived" on desktop and the web when no message of it waits, starts or runs, and reopen moves it back. Boot recovery registers the task threads and
 starts queued tasks again. When a task's provider session ends, the next session gets a handoff of
 that task's own transcript, as the main chat does; channel threads still get none.
@@ -736,8 +750,26 @@ When the last copy ends, the waiting answers start in one turn, and the prompt n
 whose copy ended with no answer. A message from the person does not wait: it starts at once and
 takes the answers that are already in. Each end of a copy schedules a drain for the requester.
 
-A message from another agent follows the recipient's busy-message mode, as a message from the
-person does. When the mode is "steer", the provider steers natively and the recipient runs a chat
+A message from another agent follows the recipient's busy-message mode. Normal desktop and web
+human sends leave that policy to the host: per-message override, then the agent's preference, then
+the app preference (default queue). This also works for remote members who cannot read host settings.
+The composer offers explicit Queue and Steer actions on a capable host. Their intent travels with
+the send and names the expected running turn; a stale turn stays queued. New human messages in a
+queue start one at a time, in order, as separate turns of the same session. Only messages already
+belonging to one usage-limit continuation resume together; teammate answer grouping is preserved.
+Queued or stale sends preserve pending questions. Typing a normal answer into a question form remains
+the separate answer operation; the explicit Queue action bypasses that form. The optional
+`message-delivery-v1` route is advertised only on protocol 9. Message ids, attachments,
+reply targets, sessions and the existing per-member idempotency window are preserved.
+
+Conversation projection keeps contiguous commentary blocks instead of collecting the whole turn
+above a later user message. Each later block is anchored to that user's message id while retaining
+the provider turn id, including through streaming and reloads. Local performance entries measure
+submit-to-receipt latency; host `message-latency` logs record queue-to-steer, acknowledgement and
+the first new assistant text item. The latter is not proof of semantic acknowledgement by the model.
+No message content is added to these measurements.
+
+For messages between agents, when the mode is "steer", the provider steers natively and the recipient runs a chat
 turn, `send_message` and the result relay take the message into that turn
 (`AgentService.#steerAgentMessage`). Channel, messaging and task work, and each answer to a request
 that went to two or more teammates, stay queued (`MailboxStore.steersChatTurn`), so those answers
@@ -1083,3 +1115,95 @@ like a plugin link, the link itself installs nothing. The page's fallback line a
 page links `/app` with the four invitation fields, and a plugin page links `/app?plugin=<slug>`. The
 browser client removes these fields after it reads them and opens the join dialog or the marketplace
 listing. It never joins or installs without a press.
+
+
+## Renomeação de tarefas pelo agente
+
+A ferramenta `openbot.rename_task` recebe `taskId` e `title` (até 120 caracteres). O agente encontra os IDs pelo resultado de `start_task` ou por `history_search` sem consulta. `AgentTasks.handleTool` usa a identidade fornecida pelo roteador e permite somente tarefas de origem `agent`, pertencentes ao chamador e sem vínculo com rotina.
+
+A operação reutiliza a renomeação persistida, registra `title_source = 'agent'` e emite `agent-tasks-changed`. Mantém conversa, fila, identidade e sessão. A renomeação manual continua com `title_source = 'user'`. Não há mudança de protocolo Team API nem de schema. O teste `scripts/agent-task-rename-e2e.ts` exercita a ferramenta, persistência e recusas com SQLite real, sem provedor externo.
+
+### Transferência de tarefas entre agentes
+
+Uma tarefa ociosa pode mudar de agente no mesmo host, mantendo seu `taskId`, `threadId`, mensagens,
+anexos, datas e cursores de leitura de cada membro. Não copia conversas nem dispara turnos. A operação
+atualiza os proprietários do thread, das entregas concluídas e dos anexos gerados na mesma transação
+SQLite; o estado em memória da mailbox só muda depois do commit. `requestId` torna a intenção
+idempotente, inclusive se a tarefa já tiver sido transferida novamente.
+
+A reserva da tarefa cobre transferência, arquivamento, exclusão e exclusão de mensagens, com liberação
+por `Effect.ensuring`. Novos envios revalidam o proprietário depois de copiar anexos. Execução,
+compactação, fila, respostas pendentes, remoção dos agentes, limite de tarefas e vínculo com rotina
+impedem a transferência quando aplicável. Sessões de provider, arquivos de contexto de execução e
+compartilhamento de navegador são encerrados; o próximo turno usa o agente de destino e o mecanismo
+existente de handoff do histórico. Cookies, credenciais e identidade do agente de origem não mudam de
+agente. O link público de uma branch só navega para sua origem quando ambos ainda pertencem ao mesmo
+agente; seus metadados internos permanecem preservados.
+
+A capability opcional `agent-task-transfer-v1` acrescenta `POST /v1/agent-tasks/transfer` no protocolo
+9, exigindo `agent-tasks-v1` e permissão de chat na origem e no destino. Protocolos publicados mantêm
+sua semântica. Desktop e cliente web passam uma ação com `serverId` capturado para os controles
+compartilhados; o destino de arraste precisa corresponder a esse mesmo servidor.
+
+Topbar, barra lateral e Central usam o mesmo preview de transferência, ocultando a linha original
+apenas durante o gesto. O motor nativo de ordenação da sidebar recusa arrastes enquanto uma tarefa
+está sendo movida e recusa gestos originados em subtarefas. Escape, perda de foco ou cancelamento
+restauram a origem. A seleção de abas transferíveis ocorre no clique, preservando não lidas durante
+o arraste. O caminho existente de reordenação das abas e movimentação ao painel lateral permanece.
+
+Evidência: `scripts/agent-task-transfer-e2e.ts` testa serviços e SQLite reais, falhas e concorrência;
+`scripts/agent-task-transfer-dev-e2e.ts` testa as três origens no dev por eventos DOM em janela
+própria, sem controlar o cursor do sistema. A API HTTP é coberta por
+`scripts/team-api-routes-e2e.ts`. Registros locais ficam em `specs/evidencias/transferencia-tarefas/`.
+
+### Ferramenta `openbot.transfer_task`
+
+O catálogo diferido anuncia `transfer_task` com apenas `taskId` e `targetAgentId`, orientando o agente
+a descobrir os IDs por `history_search` e `list_agents` e agir somente quando solicitado pelo usuário.
+A origem vem do `AgentTaskCaller` autenticado pelo router, nunca dos argumentos. O schema estrito
+recusa campos de identidade ou servidor. A ferramenta segue a classificação existente de contexto:
+canais, conversas externas e execuções de tarefas não podem chamá-la; rotinas que o router trata
+como chat próprio mantêm essa classificação. Tarefas do próprio agente podem ser de origem humana
+ou do agente; as de rotina e as ocupadas continuam recusadas pelo serviço.
+
+O hook de `AgentTasks` delega a `AgentService.transferTask`, exigindo destino visível tanto na
+validação inicial quanto antes do commit. A chave da intenção deriva de agente, thread, turno e
+chamada; o recibo é consultado antes de validar o estado atual do destino, preservando retries mesmo
+após outra transferência ou ocultação posterior. Não há uma segunda implementação da mutação.
+Erros conhecidos retornam textos localizados; falhas inesperadas usam um fallback sem detalhes
+internos. O sucesso só é respondido depois da operação concluir, sem iniciar uma tarefa ou turno.
+
+### Densidade da lista de agentes
+
+A topbar da sidebar oferece compactar/expandir após o botão Novo. `Layout` persiste
+`openbot:compact-agent-rows` no dispositivo e sincroniza mudanças entre janelas. É independente
+`leftPanelCompact`, que recolhe a barra em ícones. A composição desktop passa o estado e callback
+para a Sidebar compartilhada; outros consumidores preservam o comportamento anterior por padrão.
+No modo compacto, o avatar é 20% menor, a prévia não é renderizada e a linha mantém nome, título,
+horário e não lida. Navegação, tarefas aninhadas, estados e menus continuam nas operações existentes.
+
+### Filtro de não lidas na sidebar
+
+O olhinho da topbar usa a preferência local `openbot:sidebar-unread-only`, inicialmente desativada.
+Filtra somente a projeção da lista: agentes (incluindo não lidas das tarefas), tarefas aninhadas,
+canais/grupos, fixados e conversas diretas. Usa contagens reais, independentes dos indicadores de
+atividade; pastas vazias pelo filtro desaparecem. A conversa aberta e as preferências de ordem,
+colapso e densidade permanecem preservadas. Desativar restaura a lista.
+
+### Templates de prompts pessoais
+
+A aba Templates do menu da rail cria, edita e exclui prompts locais com nome e texto. A grade usa
+o Card compartilhado com preview do prompt; clique abre o editor e o botão direito ou os três
+pontos oferecem editar/excluir pelos menus existentes. O modal reutiliza campos e rodapé padrão.
+`features/templates/templates-context.tsx` mantém o catálogo do perfil deste computador em
+`openbot:prompt-templates:v1`, acima do escopo do servidor. Cada escrita relê o catálogo antes
+de alterar um item; falhas de leitura/gravação são mostradas e não sobrescrevem o conteúdo inválido.
+O evento de storage atualiza outras janelas. Não há sincronização com contas ou servidores.
+
+O host fornece um accessor tipado pelo `ComposerTemplatesContext` do pacote UI. O componente
+compartilhado não acessa armazenamento, aplicação ou IPC. A composição abrange os editores do
+App e das janelas auxiliares do dock de agentes/navegador; consumidores sem esse contexto
+preservam seu comportamento anterior. O `/` no início do input usa o seletor existente, pesquisa
+pelo nome e substitui todo o rascunho pelo prompt, preservando seus anexos. Clique, setas e Enter
+selecionam; o envio é uma ação posterior pelo atalho normal. Repetir o Enter ainda pressionado
+não envia o template. `$`, `@`, Escape e os demais fluxos do editor continuam independentes.

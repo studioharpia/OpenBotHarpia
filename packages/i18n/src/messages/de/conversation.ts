@@ -2,6 +2,28 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/conversation";
 
 export const messages = {
+  "conversation.threads.error.transfer": "Die Aufgabe konnte nicht verschoben werden.",
+
+  "conversation.sidePanel.pane.central": "Agentenzentrale",
+  "conversation.central.mainChat": "Hauptgespräch",
+  "conversation.central.overview": "Übersicht",
+  "conversation.central.currentMonth": "Dieser Monat",
+  "conversation.central.previousMonth": "Letzter Monat",
+  "conversation.central.tokens": "Verwendete Tokens",
+  "conversation.central.finishedTasks": "Erledigte Aufgaben",
+  "conversation.central.finishedHint":
+    "Aufgaben werden einmal nach ihrem ersten erfolgreichen Abschluss gezählt. Archivierte Aufgaben sind enthalten.",
+  "conversation.central.completedTasks": "Abgeschlossen",
+  "conversation.central.inProgressTasks": "In Bearbeitung",
+  "conversation.central.emptySection": "Keine Aufgaben in diesem Abschnitt.",
+  "conversation.central.statusRunning": "Wird ausgeführt",
+  "conversation.central.statusStarting": "Verbindung wird hergestellt",
+  "conversation.central.statusReady": "Verfügbar",
+  "conversation.central.statusUnavailable": "Nicht verfügbar",
+  "conversation.central.activity": "Token-Aktivität",
+  "conversation.central.archivedTasks": "Archiviert",
+  "conversation.central.newTask": "Neue Aufgabe",
+  "conversation.central.taskActions": "Aktionen für {title}",
   "conversation.globalSearch.title": "OpenBot durchsuchen",
   "conversation.globalSearch.filter": "Ergebnisse filtern",
   "conversation.globalSearch.tab.all": "Alle",
@@ -63,6 +85,8 @@ export const messages = {
   "conversation.sidePanel.pane.browser": "Browser",
   "conversation.sidePanel.pane.files": "Dateien",
   "conversation.threads.new": "Neuer Thread",
+  "conversation.threads.showSidebar": "Aufgaben in der Seitenleiste anzeigen",
+  "conversation.threads.showTopbar": "Aufgaben in der oberen Leiste anzeigen",
   "conversation.threads.all": "Alle Threads",
   "conversation.threads.open": "Offene Threads",
   "conversation.threads.current": "Thread: {title}",

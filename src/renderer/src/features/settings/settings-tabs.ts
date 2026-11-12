@@ -4,7 +4,6 @@ import {
   Bell,
   Bot,
   CircleArrowDown,
-  CreditCard,
   Mic,
   MousePointer2,
   PanelRight,
@@ -179,13 +178,6 @@ export const navItems: ReadonlyArray<SettingsNavItem> = [
     rows: [{ titleKey: "computerUse.permissions.title", descriptionKey: "computerUse.permissions.description" }],
   },
   {
-    value: "billing",
-    titleKey: "settings.tab.billing.title",
-    descriptionKey: "settings.tab.billing.description",
-    icon: CreditCard,
-    rows: [],
-  },
-  {
     value: "mobile-connect",
     titleKey: "settings.tab.mobileConnect.title",
     descriptionKey: "settings.tab.mobileConnect.description",
@@ -233,14 +225,14 @@ export function navItem(tab: SettingsTab): SettingsNavItem {
 }
 
 /**
- * Whether the settings panel and its search show the tab. Hosted servers opens from its own entry, not
- * from this panel. The Dynamic Island and the agent dock are macOS features of the main window.
+ * Whether the settings panel and its search show the tab. Billing and its former hosted-server
+ * alias are unavailable in this fork. The Dynamic Island and agent dock are macOS features.
  */
 export function settingsTabShown(
   tab: SettingsTab,
   window: { platform: AppInfo["platform"] | undefined; chatWindow: boolean },
 ): boolean {
-  if (tab === "hosted-servers") return false;
+  if (tab === "billing" || tab === "hosted-servers") return false;
   if (tab === "dynamic-island") return dynamicIslandSettingsShown(window.platform, window.chatWindow);
   if (tab === "agent-dock") return window.platform === "darwin" && !window.chatWindow;
   return true;

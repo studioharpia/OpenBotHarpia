@@ -35,6 +35,7 @@ import {
 import { setDiskRestoreProbe } from "../backend/disk-restore";
 import { runCauseEffect } from "../backend/effect-boundary";
 import { NewerDatabaseError } from "../backend/openbot-database-schema";
+import { readAccountServiceEndpoints } from "./account-service-endpoints";
 import { OWNER_NOTIFICATION_KEY } from "./agent-notification-level-store";
 import { watchAppArchive } from "./app-archive-watch";
 import { readAppVariant, resolveAppIconPath, resolveLogoColorIconPath, resolveMenuBarIconPath } from "./app-icon";
@@ -260,10 +261,6 @@ if (serverMode || hostedServer || localServerChild) hideExceptionErrorBox();
 if (serverMode || hostedServer || localServerChild) keepWindowsHidden();
 // A local server has no window, so it has no Dock tile either.
 if (localServerChild && process.platform === "darwin") app.dock?.hide();
-const inviteLinkOptions = {
-  allowLocalDevelopmentApiUrl: developmentRemoteRole !== null,
-  selfHostedApiOrigin: selfHostedApiOrigin(process.env.OPENBOT_AUTH_API_URL),
-};
 const developmentRemoteDebuggingPort = !app.isPackaged
   ? readDevelopmentRemoteDebuggingPort(process.env.OPENBOT_DEV_REMOTE_DEBUGGING_PORT)
   : null;
@@ -292,6 +289,27 @@ if (commandLineUserDataDirectory) {
     ),
   );
 }
+// Preserve the Keychain service used by imported OpenBot credentials.
+if (app.isPackaged && !commandLineUserDataDirectory) {
+  app.setPath("userData", join(app.getPath("appData"), "HarpiaTeam"));
+}
+const accountServiceEndpoints = readAccountServiceEndpoints(
+  app.getPath("userData"),
+  process.env,
+  app.isPackaged
+    ? { authApiUrl: "https://openbot.harpia.digital", signalUrl: "wss://openbot.harpia.digital/v1/signal" }
+    : undefined,
+);
+if (process.env.OPENBOT_AUTH_API_URL === undefined && accountServiceEndpoints.authApiUrl !== undefined) {
+  process.env.OPENBOT_AUTH_API_URL = accountServiceEndpoints.authApiUrl;
+}
+if (process.env.OPENBOT_REMOTE_SIGNAL_URL === undefined && accountServiceEndpoints.signalUrl !== undefined) {
+  process.env.OPENBOT_REMOTE_SIGNAL_URL = accountServiceEndpoints.signalUrl;
+}
+const inviteLinkOptions = {
+  allowLocalDevelopmentApiUrl: developmentRemoteRole !== null,
+  selfHostedApiOrigin: selfHostedApiOrigin(process.env.OPENBOT_AUTH_API_URL),
+};
 app.setName("OpenBot");
 app.enableSandbox();
 if (process.platform === "win32") app.setAppUserModelId("app.openbot.desktop");
@@ -520,7 +538,6 @@ const {
   ownAgentNotificationLevels: () => services?.agentNotificationLevels.levels(OWNER_NOTIFICATION_KEY) ?? new Map(),
 });
 
-// Resolved once, safely: every `app.setPath("userData", ...)` above has already run.
 /**
  * The agents that a quit stops: the local agents, and the agents on the servers on this computer,
  * whose processes end with this one. Before the services start, no agent can work.
@@ -1068,7 +1085,8 @@ async function presentApplication(): Promise<void> {
     process.platform === "linux" ||
     ((process.platform === "darwin" || process.platform === "win32") && app.isPackaged)
   ) {
-    if (!app.setAsDefaultProtocolClient("openbot")) {
+    // Register invitations only from the standard installed OpenBot bundle.
+    if (app.getPath("exe").includes("/OpenBot.app/") && !app.setAsDefaultProtocolClient("openbot")) {
       logger.warn("Unable to register the openbot:// scheme. Invitation links will not open OpenBot.");
     }
   }

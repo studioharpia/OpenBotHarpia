@@ -18,6 +18,7 @@ export interface ConversationPort {
     | "listMemories"
     | "listRoutines"
     | "listTables"
+    | "acknowledgeFailedTurn"
     | "markConversationRead"
     | "markConversationUnread"
     | "readConversationPage"

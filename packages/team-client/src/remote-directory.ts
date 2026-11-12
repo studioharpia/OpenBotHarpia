@@ -1,4 +1,5 @@
 import { type HostKeyHandover, optionalHostKeyHandovers } from "@openbot/contracts/host-key-handover";
+import { LEGACY_TEAM_MEMBER_LIMIT } from "@openbot/contracts/input-limits";
 import {
   createInviteUrl,
   type InviteLinkOptions,
@@ -223,7 +224,7 @@ export class RemoteTeamDirectoryClient {
                 devicePublicKey,
                 membershipId: candidate.membershipId,
                 role: candidate.role,
-                ...(memberLimit === undefined ? {} : { memberLimit }),
+                memberLimit: memberLimit ?? LEGACY_TEAM_MEMBER_LIMIT,
                 // A bad value drops only the flag, so the server stays in the list.
                 ...(isBoolean(hosted) ? { hosted } : {}),
                 ...(keyChangedAt === null ? {} : { keyChangedAt }),
@@ -294,9 +295,6 @@ export class RemoteTeamDirectoryClient {
         token: "x".repeat(32),
       };
       yield* directoryDecode(() => createInviteUrl(payload, this.#inviteLinks));
-      // The account service cannot email links for a self-hosted service.
-      if (input.email && selfHostedApiOrigin(payload.apiUrl))
-        return yield* directoryFailure(sourceText("error.remote.selfHostedInviteNoEmail"));
       const value = yield* this.#request(`/v2/remote/hosts/${encodeURIComponent(host.hostId)}/invites`, {
         method: "POST",
         body: input,

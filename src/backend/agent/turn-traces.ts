@@ -10,11 +10,21 @@ import {
   type ConversationTraceStepKind,
   type ConversationTurnTrace,
 } from "@openbot/contracts/ipc";
-import { redactText } from "@openbot/logging";
+import { createOpenBotLogger, redactText } from "@openbot/logging";
+
+const latencyLogger = createOpenBotLogger("message-latency");
+export interface SteerTimingEvent {
+  stage: "sent" | "accepted" | "failed";
+  agentId: string;
+  turnId: string;
+  deliveryId: string;
+  createdAt: string;
+}
 
 interface RunningTrace {
   startedAt: string;
   steps: Map<string, ConversationTraceStep>;
+  openItems: Set<string>;
 }
 
 /**
@@ -24,9 +34,79 @@ interface RunningTrace {
  */
 export class TurnTraces {
   readonly #turns = new Map<string, RunningTrace>();
+  readonly #steers = new Map<
+    string,
+    {
+      event: SteerTimingEvent;
+      sentAt: number;
+      acceptedAt: number | null;
+      firstTextAt: number | null;
+      priorItems: Set<string>;
+    }
+  >();
+
+  /** Host-only metadata. An acknowledgement is not proof the model read the instruction. */
+  steer(event: SteerTimingEvent): void {
+    const now = Date.now();
+    if (event.stage === "sent") {
+      this.#steers.set(event.deliveryId, {
+        event,
+        sentAt: now,
+        acceptedAt: null,
+        firstTextAt: null,
+        priorItems: new Set([
+          ...(this.#turns.get(event.turnId)?.steps.keys() ?? []),
+          ...(this.#turns.get(event.turnId)?.openItems ?? []),
+        ]),
+      });
+    }
+    const pending = this.#steers.get(event.deliveryId);
+    if (!pending) return;
+    if (event.stage === "accepted") pending.acceptedAt = now;
+    latencyLogger.info("Message steering milestone.", {
+      stage: event.stage,
+      agentId: event.agentId,
+      deliveryId: event.deliveryId,
+      turnId: event.turnId,
+      queueToRequestMs: Math.max(0, pending.sentAt - Date.parse(event.createdAt)),
+      requestElapsedMs: now - pending.sentAt,
+    });
+    if (event.stage === "failed" || (event.stage === "accepted" && pending.firstTextAt !== null))
+      this.#steers.delete(event.deliveryId);
+  }
+
+  /** Only a new assistant text item counts, not remaining deltas of an item already streaming. */
+  assistantText(turnId: string, itemId: string): void {
+    const now = Date.now();
+    for (const [id, pending] of this.#steers) {
+      if (pending.event.turnId !== turnId || pending.firstTextAt !== null || pending.priorItems.has(itemId)) continue;
+      pending.firstTextAt = now;
+      latencyLogger.info("First new assistant text after steering.", {
+        agentId: pending.event.agentId,
+        deliveryId: id,
+        turnId,
+        requestToFirstTextMs: now - pending.sentAt,
+        acceptedToFirstTextMs: pending.acceptedAt === null ? null : now - pending.acceptedAt,
+      });
+      if (pending.acceptedAt !== null) this.#steers.delete(id);
+    }
+  }
+
+  #finishSteers(turnId: string): void {
+    for (const [id, pending] of this.#steers) {
+      if (pending.event.turnId !== turnId) continue;
+      if (pending.firstTextAt === null)
+        latencyLogger.info("Steered turn ended without a new assistant text milestone.", {
+          agentId: pending.event.agentId,
+          deliveryId: id,
+          turnId,
+        });
+      this.#steers.delete(id);
+    }
+  }
 
   begin(turnId: string, startedAt: string): void {
-    this.#turns.set(turnId, { startedAt, steps: new Map() });
+    this.#turns.set(turnId, { startedAt, steps: new Map(), openItems: new Set() });
   }
 
   /**
@@ -53,6 +133,8 @@ export class TurnTraces {
     const trace = this.#turns.get(turnId);
     // A step id must pass the message guard, or the message that holds the trace would not decode.
     if (!trace || !itemId || itemId.length > INPUT_LIMITS.identifier) return;
+    if (event.completed) trace.openItems.delete(itemId);
+    else trace.openItems.add(itemId);
     const now = new Date().toISOString();
     let step = trace.steps.get(itemId);
     if (!step) {
@@ -76,6 +158,7 @@ export class TurnTraces {
 
   /** The trace of a turn that ends now, without its usage. It removes the turn. */
   take(turnId: string, endedAt: string): ConversationTurnTrace | null {
+    this.#finishSteers(turnId);
     const trace = this.#turns.get(turnId);
     this.#turns.delete(turnId);
     if (!trace) return null;
@@ -83,10 +166,12 @@ export class TurnTraces {
   }
 
   drop(turnId: string): void {
+    this.#finishSteers(turnId);
     this.#turns.delete(turnId);
   }
 
   clear(): void {
+    this.#steers.clear();
     this.#turns.clear();
   }
 }

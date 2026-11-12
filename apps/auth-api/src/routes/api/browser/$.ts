@@ -10,6 +10,7 @@ import {
   requestCompanySignIn,
   requestHostedServerService,
   requestHostedSiteService,
+  requestInviteLinkOptions,
   requestRemoteControlPlane,
   requestTeamInviteEmailDelivery,
 } from "../../../server/request-auth";
@@ -23,6 +24,7 @@ function handle({ request }: { request: Request }) {
     hostLogo: (hostId, version) => readHostLogo(requestAvatarBucket(), hostId, version),
     hosting: requestHostedServerService,
     inviteEmailDelivery: requestTeamInviteEmailDelivery,
+    inviteLinks: requestInviteLinkOptions(),
     attribution: requestAccountAttribution,
     billing: requestBillingService,
     avatarBucket: requestAvatarBucket,

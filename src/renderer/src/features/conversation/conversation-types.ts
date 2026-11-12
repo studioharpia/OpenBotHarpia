@@ -20,10 +20,12 @@ import type {
   CustomProviderSummary,
   DraftAttachment,
   FilePreview,
+  MessageReaction,
   ProviderRuntimeStatus,
   QueueSnapshot,
   ResponseStyle,
   RoutineFields,
+  SendMessageInput,
   ServerSummary,
   TeamPresenceSnapshot,
   UpdateAgentAdminSettingsInput,
@@ -44,6 +46,7 @@ import type { ThreadHeaderProps, ThreadItem } from "@openbot/ui/features/convers
 import type { SidebarAgentWait } from "@openbot/ui/features/sidebar/sidebar-agent-states";
 import type { JSX } from "@solidjs/web";
 import type { ConnectorRegistry } from "../connectors/connector-registry";
+import type { UsagePort } from "../usage/usage-port";
 import type { ConversationRuntime } from "./conversation-runtime";
 import type { TurnStepLines } from "./turn-step-lines";
 
@@ -129,6 +132,7 @@ export interface ConversationChannelSource {
 }
 
 export interface ConversationChannelSettingsPaneProps {
+  width?: number | undefined;
   maxWidth: () => number;
   onWidthChange: (width: number) => void;
   onClose: () => void;
@@ -141,6 +145,8 @@ export interface ConversationProps {
   runtime?: ConversationRuntime | undefined;
   notice?: JSX.Element | undefined;
   onOpenUsage?: ((trigger: HTMLButtonElement) => void) | undefined;
+  /** Usage of the connected host. Desktop defaults to its existing usage bridge. */
+  usagePort?: UsagePort | undefined;
   onOpenMarketplace?: (() => void) | undefined;
   /**
    * Opens Marketplace at one app, from a suggestion card. `connect` is true only when the person
@@ -312,6 +318,7 @@ export interface ConversationProps {
     target?: ConversationTarget,
     clientMessageId?: string,
     voiceRecordingDraftId?: string,
+    delivery?: Pick<SendMessageInput, "deliveryMode" | "expectedTurnId">,
   ) => Promise<SendMessageResult>;
   onMarkRead: () => Promise<void>;
   /** Marks an agent message and the messages after it unread. Without it, the message menu has no such item. */
@@ -483,10 +490,17 @@ export interface ConversationThreads {
    * `attachmentDraftIds` are the files that the text names. `replyToMessageId` is the message of the open
    * thread that the message replies to; a new thread has no message to reply to.
    */
-  onSend: (text: string, attachmentDraftIds: string[], replyToMessageId?: string | null) => Promise<boolean>;
+  onSend: (
+    text: string,
+    attachmentDraftIds: string[],
+    replyToMessageId?: string | null,
+    deliveryMode?: "queue" | "steer",
+  ) => Promise<boolean>;
   onStop: () => void;
   /** The person sees the open side thread through this message. */
-  onRead: (messageId: string) => void;
+  onRead: (messageId: string | null) => void;
+  onMarkUnread?: ((messageId: string) => Promise<void>) | undefined;
+  onReactMessage?: ((messageId: string, emoji: MessageReaction | null) => Promise<void>) | undefined;
   onRespondApproval: (decision: "accept" | "decline", options?: PromptAnswerOptions) => Promise<boolean>;
   /** The context of the open side thread, when its provider reported it. */
   contextState: AgentContextState | undefined;
@@ -566,9 +580,16 @@ export interface SideThread {
   /** The thread has messages before the loaded ones. */
   olderMessages: AgentThreadOlderMessages | undefined;
   approval: AgentApproval | undefined;
-  onSend: (text: string, attachmentDraftIds: string[], replyToMessageId?: string | null) => Promise<boolean>;
+  onSend: (
+    text: string,
+    attachmentDraftIds: string[],
+    replyToMessageId?: string | null,
+    deliveryMode?: "queue" | "steer",
+  ) => Promise<boolean>;
   onStop: () => void;
-  onRead: (messageId: string) => void;
+  onRead: (messageId: string | null) => void;
+  onMarkUnread?: ((messageId: string) => Promise<void>) | undefined;
+  onReactMessage?: ((messageId: string, emoji: MessageReaction | null) => Promise<void>) | undefined;
   onRespondApproval: (decision: "accept" | "decline", options?: PromptAnswerOptions) => Promise<boolean>;
   contextState: AgentContextState | undefined;
   onCompactContext?: (() => Promise<void>) | undefined;

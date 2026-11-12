@@ -10,9 +10,13 @@ import {
   Button,
   CircleFadingArrowUp,
   DropdownMenu,
+  Eye,
+  EyeOff,
   FolderPlus,
   Hash,
   IconButton,
+  Maximize2,
+  Minimize2,
   Puzzle,
 } from "@openbot/ui";
 import { Show } from "solid-js";
@@ -165,6 +169,34 @@ export function SidebarTopbar() {
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
+        </Show>
+        <Show when={!props.compact && props.onCompactAgentRowsChange}>
+          <IconButton
+            variant="ghost"
+            class="sidebar-icon-button sidebar-density-button no-drag"
+            label={t(props.compactAgentRows ? "sidebar.topbar.expandAgents" : "sidebar.topbar.compactAgents")}
+            tooltip={t(props.compactAgentRows ? "sidebar.topbar.expandAgents" : "sidebar.topbar.compactAgents")}
+            aria-pressed={props.compactAgentRows ? "true" : "false"}
+            onClick={() => props.onCompactAgentRowsChange?.(!props.compactAgentRows)}
+          >
+            <Show when={props.compactAgentRows} fallback={<Minimize2 aria-hidden="true" />}>
+              <Maximize2 aria-hidden="true" />
+            </Show>
+          </IconButton>
+        </Show>
+        <Show when={!props.compact && props.onUnreadOnlyChange}>
+          <IconButton
+            variant="ghost"
+            class="sidebar-icon-button sidebar-unread-filter-button no-drag"
+            label={t(props.unreadOnly ? "sidebar.topbar.showAllChats" : "sidebar.topbar.showUnreadChats")}
+            tooltip={t(props.unreadOnly ? "sidebar.topbar.showAllChats" : "sidebar.topbar.showUnreadChats")}
+            aria-pressed={props.unreadOnly ? "true" : "false"}
+            onClick={() => props.onUnreadOnlyChange?.(!props.unreadOnly)}
+          >
+            <Show when={props.unreadOnly} fallback={<Eye aria-hidden="true" />}>
+              <EyeOff aria-hidden="true" />
+            </Show>
+          </IconButton>
         </Show>
       </div>
     </div>

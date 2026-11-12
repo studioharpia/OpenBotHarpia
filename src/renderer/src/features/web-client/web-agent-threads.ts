@@ -1,15 +1,19 @@
 import type { ConversationSnapshot } from "@openbot/contracts/ipc";
+import { AGENT_TASK_LIMIT_V2_CAPABILITY } from "@openbot/contracts/team-protocol/agent-task-limit-v2";
+import { AGENT_TASK_TRANSFER_CAPABILITY } from "@openbot/contracts/team-protocol/agent-task-transfer-v1";
 import { AGENT_TASKS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-tasks-v1";
 import {
   AGENT_THREAD_BRANCHES_CAPABILITY,
   withAgentThreadBranches,
 } from "@openbot/contracts/team-protocol/agent-thread-branches-v1";
 import { AGENT_THREAD_FILES_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-files-v1";
+import { AGENT_THREAD_MESSAGE_ACTIONS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-message-actions-v1";
 import { AGENT_THREAD_PAGES_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-pages-v1";
 import { AGENT_THREAD_READS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-reads-v1";
 import { AGENT_THREAD_REPLIES_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-replies-v1";
 import { AGENT_THREADS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-threads-v1";
 import { MESSAGE_DELETE_CAPABILITY, MESSAGE_DELETE_ROUTES } from "@openbot/contracts/team-protocol/message-delete-v1";
+import { MESSAGE_DELIVERY_CAPABILITY } from "@openbot/contracts/team-protocol/message-delivery-v1";
 import { runTeamEffect } from "@openbot/team-client";
 import {
   agentTaskControl,
@@ -18,13 +22,16 @@ import {
   listAgentTasks,
   listAgentThreadBranches,
   markAgentThreadRead,
+  markAgentThreadUnread,
   readAgentTask,
   readAgentThreadPage,
   renameAgentThread,
   sendAgentTaskMessage,
+  setAgentThreadMessageReaction,
   startAgentTask,
   type TeamApiRequest,
   type TeamRequestError,
+  transferAgentTask,
 } from "@openbot/team-client/team-api-requests";
 import { Effect } from "effect";
 import { onCleanup, untrack } from "solid-js";
@@ -51,7 +58,11 @@ export function withoutPreviewUrls(snapshot: ConversationSnapshot): Conversation
  * branch links are read after the tasks, so that each listed branch has its link. Each call reads the
  * request again: it fails once the tab leaves the host.
  */
-function webAgentTasksPort(request: () => TeamApiRequest, branchable: () => boolean): AgentTasksPort {
+function webAgentTasksPort(
+  request: () => TeamApiRequest,
+  branchable: () => boolean,
+  extendedLimit: () => boolean,
+): AgentTasksPort {
   const run = async <A>(call: (request: TeamApiRequest) => Effect.Effect<A, TeamRequestError>) =>
     runTeamEffect(call(request()).pipe(Effect.mapError((error) => error.cause)));
   return {
@@ -60,10 +71,10 @@ function webAgentTasksPort(request: () => TeamApiRequest, branchable: () => bool
         // An effect callback can ask for the list: the capability is input here, not a dependency.
         untrack(branchable)
           ? Effect.gen(function* () {
-              const snapshot = yield* listAgentTasks(host, agentId);
+              const snapshot = yield* listAgentTasks(host, agentId, untrack(extendedLimit));
               return withAgentThreadBranches(snapshot, yield* listAgentThreadBranches(host, agentId));
             })
-          : listAgentTasks(host, agentId),
+          : listAgentTasks(host, agentId, untrack(extendedLimit)),
       ),
     readTask: (input) => run((host) => readAgentTask(host, input).pipe(Effect.map(withoutPreviewUrls))),
     readTaskPage: (input) =>
@@ -80,6 +91,9 @@ function webAgentTasksPort(request: () => TeamApiRequest, branchable: () => bool
     renameTask: (input) => run((host) => renameAgentThread(host, input)),
     deleteTask: (input) => run((host) => deleteAgentThread(host, input)),
     markTaskRead: (input) => run((host) => markAgentThreadRead(host, input)),
+    markTaskUnread: (input) => run((host) => markAgentThreadUnread(host, input)),
+    setTaskMessageReaction: (input) => run((host) => setAgentThreadMessageReaction(host, input)),
+    transferTask: (input) => run((host) => transferAgentTask(host, input)),
     branchTask: (input) => run((host) => branchAgentThread(host, input)),
     // The response is empty.
     deleteTaskMessage: async ({ agentId, taskId, messageId }) => {
@@ -100,14 +114,21 @@ export function createWebAgentThreads(options: {
 }) {
   const { workspace, hostId } = options;
   const branchable = () => workspace.state.capabilities.includes(AGENT_THREAD_BRANCHES_CAPABILITY);
-  const port = webAgentTasksPort(options.request, branchable);
+  const port = webAgentTasksPort(options.request, branchable, () =>
+    workspace.state.capabilities.includes(AGENT_TASK_LIMIT_V2_CAPABILITY),
+  );
   const tasks = createAgentTasks({
+    failureReadScope: hostId,
+    serverId: () => hostId,
+    transferable: () => workspace.state.capabilities.includes(AGENT_TASK_TRANSFER_CAPABILITY),
     port: () => port,
     activeAgentId: () => workspace.state.selectedId ?? undefined,
     local: () => false,
     available: () => workspace.state.capabilities.includes(AGENT_TASKS_CAPABILITY),
     editable: () => workspace.state.capabilities.includes(AGENT_THREADS_CAPABILITY),
     readable: () => workspace.state.capabilities.includes(AGENT_THREAD_READS_CAPABILITY),
+    messageDelivery: () => workspace.state.capabilities.includes(MESSAGE_DELIVERY_CAPABILITY),
+    messageActions: () => workspace.state.capabilities.includes(AGENT_THREAD_MESSAGE_ACTIONS_CAPABILITY),
     branchable,
     filesAccepted: () => workspace.state.capabilities.includes(AGENT_THREAD_FILES_CAPABILITY),
     repliable: () => workspace.state.capabilities.includes(AGENT_THREAD_REPLIES_CAPABILITY),

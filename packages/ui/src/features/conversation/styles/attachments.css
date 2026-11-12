@@ -1,12 +1,17 @@
 .message-attachments {
-  display: grid;
-  width: min(100%, 256px);
-  gap: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  width: max-content;
+  max-width: 100%;
+  gap: var(--openbot-space-2);
   margin-top: 10px;
 }
 
 .message-attachment {
   display: grid;
+  flex: 0 1 232px;
+  width: min(100%, 232px);
   grid-template-columns: minmax(0, 1fr) 40px 40px;
   min-width: 0;
   min-height: 56px;
@@ -40,7 +45,8 @@
 
 .message-attachments-group {
   display: grid;
-  width: min(100%, 256px);
+  width: max-content;
+  max-width: 100%;
   margin-top: var(--openbot-space-2);
   gap: var(--openbot-space-1-5);
 }
@@ -237,11 +243,6 @@
   white-space: nowrap;
 }
 
-.message-attachments-group:has(.attachment-media-player),
-.message-attachments:has(.attachment-media-player) {
-  width: min(100%, 360px);
-}
-
 .attachment-media-player {
   grid-column: 1 / -1;
   display: block;
@@ -251,6 +252,8 @@
 }
 
 .message-attachment[data-media] {
+  flex-basis: 360px;
+  width: min(100%, 360px);
   grid-template-columns: minmax(0, 1fr) var(--openbot-control-sm) var(--openbot-control-sm);
   gap: var(--openbot-space-2);
   padding: var(--openbot-space-3);

@@ -16,6 +16,7 @@ import { createSignal, For, flush, onSettled, Show } from "solid-js";
 import { ThreadStatusText, ThreadTabIcon, threadAttention } from "./ThreadStatusMark";
 import { ThreadTabGhost } from "./ThreadTabGhost";
 import { ThreadTitle } from "./ThreadTitle";
+import { clearTaskTransfer, finishTaskTransfer, updateTaskTransfer } from "./task-transfer-drag";
 import { setCarriedThreadTab, sidePanelTabRow, swallowNextClick } from "./thread-tab-drag";
 import { MAIN_THREAD_ID, type ThreadHeaderProps, type ThreadItem, threadBusy } from "./thread-types";
 
@@ -71,6 +72,8 @@ function ThreadTab(props: {
   onClose: () => void;
   onMove: (step: -1 | 1) => void;
   onRename: () => void;
+  deferPointerSelection: boolean;
+  onOpen: () => void;
   /** The user edits the title of this tab. */
   renaming: boolean;
 }) {
@@ -97,6 +100,18 @@ function ThreadTab(props: {
       data-menu-open={menuMark()}
       data-renaming={renameMark()}
       title={props.thread.title}
+      onPointerDown={(event) => {
+        // Selecting on press would mark an unread task read before the user actually drags it.
+        if (props.deferPointerSelection && event.button === 0 && event.isPrimary) event.preventDefault();
+      }}
+      onPointerUp={(event) => {
+        if (props.deferPointerSelection && event.button === 0) event.preventDefault();
+      }}
+      onClick={(event) => {
+        if (!props.deferPointerSelection || event.button !== 0) return;
+        event.preventDefault();
+        props.onOpen();
+      }}
       onDblClick={(event: MouseEvent) => {
         if (event.target instanceof Element && event.target.closest(".agent-threads-tab-close")) return;
         props.onRename();
@@ -372,7 +387,7 @@ export function ThreadTabs(props: ThreadHeaderProps) {
           setDragged(null);
         }
       }
-      setCarriedThreadTab(away && thread ? { thread, from: "chat", x: current.x, y } : null);
+      setCarriedThreadTab(away && thread && !props.taskTransfer ? { thread, from: "chat", x: current.x, y } : null);
       return away;
     };
     const autoScroll = () => {
@@ -406,39 +421,63 @@ export function ThreadTabs(props: ThreadHeaderProps) {
         element.querySelector(`[data-thread-id="${CSS.escape(current.id)}"]`)?.setAttribute("data-dragged", "");
         current.frame = requestAnimationFrame(autoScroll);
       }
+      const origin = element.querySelector<HTMLElement>(`[data-thread-id="${CSS.escape(current.id)}"]`);
+      if (
+        origin &&
+        updateTaskTransfer(
+          props.taskTransfer,
+          props.tabs.find((item) => item.id === current.id),
+          event.clientX,
+          event.clientY,
+          origin,
+        )
+      ) {
+        setCarriedThreadTab(null);
+        setDragged(null);
+        return;
+      }
       if (!carryAway(current, event.clientY)) follow(current);
     };
-    const onDragEnd = (event: PointerEvent) => {
+    const onDragEnd = (event: Event) => {
       const current = drag;
-      if (!current || event.pointerId !== current.pointerId) return;
+      if (!current || (event instanceof PointerEvent && event.pointerId !== current.pointerId)) return;
+      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
+      const cancelled = event.type !== "pointerup";
       drag = null;
       window.removeEventListener("pointermove", onDragMove);
       window.removeEventListener("pointerup", onDragEnd);
       window.removeEventListener("pointercancel", onDragEnd);
+      window.removeEventListener("blur", onDragEnd);
+      window.removeEventListener("keydown", onDragEnd);
       if (!current.moving) return;
       cancelAnimationFrame(current.frame);
       element.removeAttribute("data-dragging");
       element.querySelector("[data-dragged]")?.removeAttribute("data-dragged");
       setCarriedThreadTab(null);
       swallowNextClick();
-      if (current.away && event.type !== "pointercancel") {
+      if (finishTaskTransfer(cancelled)) {
+        setDragged(null);
+        for (const item of tabElements()) item.style.transform = "";
+        return;
+      }
+      if (cancelled) {
+        setDragged(null);
+        for (const item of tabElements()) item.style.transform = "";
+        return;
+      }
+      if (current.away) {
         setDragged(null);
         props.onMoveToSide?.(current.id);
         return;
       }
-      reorder(
-        current.id,
-        event.type === "pointercancel"
-          ? tabElements().findIndex((tab) => tab.dataset.threadId === current.id)
-          : current.target,
-      );
+      reorder(current.id, current.target);
     };
     const onDragStart = (event: PointerEvent) => {
       if (event.button !== 0 || !event.isPrimary || drag) return;
       if (!(event.target instanceof Element) || event.target.closest(".agent-threads-tab-close")) return;
       const id = event.target.closest<HTMLElement>(".agent-threads-tab")?.dataset.threadId;
       // One tab can still move to the side panel.
-      if (!id || (tabElements().length < 2 && !props.onMoveToSide)) return;
+      if (!id || (tabElements().length < 2 && !props.onMoveToSide && !props.taskTransfer)) return;
       drag = {
         id,
         pointerId: event.pointerId,
@@ -454,6 +493,8 @@ export function ThreadTabs(props: ThreadHeaderProps) {
       window.addEventListener("pointermove", onDragMove);
       window.addEventListener("pointerup", onDragEnd);
       window.addEventListener("pointercancel", onDragEnd);
+      window.addEventListener("blur", onDragEnd);
+      window.addEventListener("keydown", onDragEnd);
     };
 
     /** A mouse wheel scrolls the tabs sideways. A trackpad already scrolls them. */
@@ -471,6 +512,17 @@ export function ThreadTabs(props: ThreadHeaderProps) {
     // A tab control that stops the event, such as close or move, keeps it from the window: the
     // timer ends the action after the event in that case.
     const choose = (event: Event) => {
+      if (event.type === "pointerdown" && props.taskTransfer && event.target instanceof Element) {
+        const id = event.target.closest<HTMLElement>(".agent-threads-tab")?.dataset.threadId;
+        if (props.tabs.some((thread) => thread.id === id && thread.kind === "side")) {
+          choosing = false;
+          return;
+        }
+      }
+      if (event instanceof KeyboardEvent && event.key === "Escape") {
+        choosing = false;
+        return;
+      }
       choosing = true;
       window.addEventListener(event.type, endChoice, { once: true });
       setTimeout(endChoice);
@@ -497,8 +549,11 @@ export function ThreadTabs(props: ThreadHeaderProps) {
       window.removeEventListener("pointermove", onDragMove);
       window.removeEventListener("pointerup", onDragEnd);
       window.removeEventListener("pointercancel", onDragEnd);
+      window.removeEventListener("blur", onDragEnd);
+      window.removeEventListener("keydown", onDragEnd);
       if (drag) cancelAnimationFrame(drag.frame);
       if (drag?.away) setCarriedThreadTab(null);
+      clearTaskTransfer();
       disposed = true;
       show(0);
       document.removeEventListener("focusin", keepFocus);
@@ -620,6 +675,8 @@ export function ThreadTabs(props: ThreadHeaderProps) {
                     onClose={() => closeTab(thread().id)}
                     onMove={(step) => move(thread().id, step)}
                     onRename={() => startRename(thread().id)}
+                    deferPointerSelection={Boolean(props.taskTransfer) && thread().kind === "side"}
+                    onOpen={() => props.onOpen(thread().id)}
                     renaming={isRenaming(thread().id)}
                   />
                 )}

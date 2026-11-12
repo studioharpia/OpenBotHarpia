@@ -12,8 +12,10 @@ import { Badge, buttonVariants, ContextMenu } from "@openbot/ui";
 import { createMemo, For, Match, Show, Switch } from "solid-js";
 import { useText } from "../../text";
 import { ChannelAvatar } from "../channels/ChannelAvatar";
+import { MAIN_THREAD_ID } from "../conversation/threads/thread-types";
 import { SidebarAgentContextMenu } from "./SidebarAgentContextMenu";
 import { SidebarAgentIndicator, SidebarPinnedAvatar } from "./SidebarAgentIndicator";
+import { SidebarAgentRow } from "./SidebarAgentRow";
 import { SidebarChannelContextMenu } from "./SidebarChannelContextMenu";
 import { sidebarUnreadBadge } from "./sidebar-agent-states";
 import { sidebarAgentStateLabel } from "./sidebar-filtering";
@@ -37,7 +39,10 @@ export function SidebarPinnedGroup() {
   const { t, format } = useText();
   const chatName = (chat: SidebarChatItem) => (chat.kind === "agent" ? chat.agent.name : chat.channel.name);
   const chatIsActive = (chat: SidebarChatItem) =>
-    chat.kind === "agent" ? props.activeAgentId === chat.id : props.activeChannelId === chat.id;
+    chat.kind === "agent"
+      ? props.activeAgentId === chat.id &&
+        (!props.agentThreads || props.agentThreads.activeId(chat.id) === MAIN_THREAD_ID)
+      : props.activeChannelId === chat.id;
   const selectChat = (chat: SidebarChatItem) => {
     if (chat.kind === "agent") props.onSelectAgent(chat.id);
     else props.onSelectChannel?.(chat.id);
@@ -54,7 +59,13 @@ export function SidebarPinnedGroup() {
         ]}
         aria-label={t("sidebar.pinned.label")}
       >
-        <ul class="sidebar-pinned-list" data-dragging={draggedPinnedKey() ? "" : undefined}>
+        <ul
+          class={[
+            "sidebar-pinned-list",
+            { "sidebar-pinned-list-threads": Boolean(props.agentThreads) && !props.compact },
+          ]}
+          data-dragging={draggedPinnedKey() ? "" : undefined}
+        >
           <Show when={emptyPinnedDropVisible()}>
             <li class="sidebar-pinned-empty-drop">{t("sidebar.pinned.dropHint")}</li>
           </Show>
@@ -93,6 +104,7 @@ export function SidebarPinnedGroup() {
                     "sidebar-pinned-item",
                     {
                       "sidebar-pinned-item-dragging": draggedPinnedKey() === key(),
+                      "sidebar-pinned-item-threads": Boolean(props.agentThreads) && !props.compact,
                       "sidebar-pinned-item-drag-over": dragOverPinnedKey() === key(),
                     },
                   ]}
@@ -118,92 +130,103 @@ export function SidebarPinnedGroup() {
                     }
                   }}
                 >
-                  <ContextMenu.Root modal={false}>
-                    <ContextMenu.Trigger
-                      as="button"
-                      type="button"
-                      class={[
-                        buttonVariants({ variant: "ghost" }),
-                        "agent-row sidebar-pinned-row",
-                        { "agent-row-active": active() },
-                      ]}
-                      aria-label={rowLabel()}
-                      title={stateLabel() || undefined}
-                      aria-pressed={active() ? "true" : "false"}
-                      data-cuelume-navigate=""
-                      onClick={() => selectChat(item.chat)}
-                    >
-                      <Switch>
-                        <Match when={item.chat.kind === "agent" ? item.chat.agent : undefined}>
-                          {(agent) => (
-                            <>
-                              <SidebarPinnedAvatar
-                                agent={agent()}
-                                mood={props.agentMoods[agent().id] ?? "idle"}
-                                agentState={() => props.agentStates[agent().id]}
-                              />
-                              <span class="agent-row-copy sidebar-pinned-copy">
-                                <strong class="sidebar-pinned-name" title={name()}>
-                                  {name()}
-                                </strong>
-                                <Show when={agent().title.trim()}>
-                                  {(label) => (
-                                    <Badge class="sidebar-pinned-title" title={label()}>
-                                      <span>{label()}</span>
-                                    </Badge>
-                                  )}
-                                </Show>
-                              </span>
-                              <Show when={props.agentStates[agent().id]}>
-                                {(state) => <span class="sr-only">{sidebarAgentStateLabel(state(), t, format)}</span>}
-                              </Show>
-                            </>
-                          )}
-                        </Match>
-                        <Match when={item.chat.kind === "channel" ? item.chat.channel : undefined}>
-                          {(channel) => (
-                            <>
-                              <span class="agent-row-avatar sidebar-pinned-avatar">
-                                <ChannelAvatar
-                                  members={channel().members}
-                                  agents={props.agents}
-                                  layout="cluster"
-                                  icon={channel().icon}
-                                  imageUrl={channel().imageUrl}
-                                />
-                                <SidebarAgentIndicator state={channelBadge} />
-                              </span>
-                              <span class="agent-row-copy sidebar-pinned-copy">
-                                <strong class="sidebar-pinned-name" title={name()}>
-                                  {name()}
-                                </strong>
-                                <Show when={channel().title.trim()}>
-                                  {(label) => (
-                                    <Badge class="sidebar-pinned-title" title={label()}>
-                                      <span>{label()}</span>
-                                    </Badge>
-                                  )}
-                                </Show>
-                              </span>
-                              <Show when={channel().unreadCount > 0}>
-                                <span class="sr-only">
-                                  {t("sidebar.channel.unread", { count: channel().unreadCount })}
-                                </span>
-                              </Show>
-                            </>
-                          )}
-                        </Match>
-                      </Switch>
-                    </ContextMenu.Trigger>
-                    <Switch>
-                      <Match when={item.chat.kind === "agent" ? item.chat.agent : undefined}>
-                        {(agent) => <SidebarAgentContextMenu agent={agent()} pinned={true} />}
-                      </Match>
-                      <Match when={item.chat.kind === "channel" ? item.chat.channel : undefined}>
-                        {(channel) => <SidebarChannelContextMenu channel={channel()} pinned={true} />}
-                      </Match>
-                    </Switch>
-                  </ContextMenu.Root>
+                  <Show
+                    when={
+                      props.agentThreads && !props.compact && item.chat.kind === "agent" ? item.chat.agent : undefined
+                    }
+                    fallback={
+                      <ContextMenu.Root modal={false}>
+                        <ContextMenu.Trigger
+                          as="button"
+                          type="button"
+                          class={[
+                            buttonVariants({ variant: "ghost" }),
+                            "agent-row sidebar-pinned-row",
+                            { "agent-row-active": active() },
+                          ]}
+                          aria-label={rowLabel()}
+                          title={stateLabel() || undefined}
+                          aria-pressed={active() ? "true" : "false"}
+                          data-cuelume-navigate=""
+                          onClick={() => selectChat(item.chat)}
+                        >
+                          <Switch>
+                            <Match when={item.chat.kind === "agent" ? item.chat.agent : undefined}>
+                              {(agent) => (
+                                <>
+                                  <SidebarPinnedAvatar
+                                    agent={agent()}
+                                    mood={props.agentMoods[agent().id] ?? "idle"}
+                                    agentState={() => props.agentStates[agent().id]}
+                                  />
+                                  <span class="agent-row-copy sidebar-pinned-copy">
+                                    <strong class="sidebar-pinned-name" title={name()}>
+                                      {name()}
+                                    </strong>
+                                    <Show when={agent().title.trim()}>
+                                      {(label) => (
+                                        <Badge class="sidebar-pinned-title" title={label()}>
+                                          <span>{label()}</span>
+                                        </Badge>
+                                      )}
+                                    </Show>
+                                  </span>
+                                  <Show when={props.agentStates[agent().id]}>
+                                    {(state) => (
+                                      <span class="sr-only">{sidebarAgentStateLabel(state(), t, format)}</span>
+                                    )}
+                                  </Show>
+                                </>
+                              )}
+                            </Match>
+                            <Match when={item.chat.kind === "channel" ? item.chat.channel : undefined}>
+                              {(channel) => (
+                                <>
+                                  <span class="agent-row-avatar sidebar-pinned-avatar">
+                                    <ChannelAvatar
+                                      members={channel().members}
+                                      agents={props.agents}
+                                      layout="cluster"
+                                      icon={channel().icon}
+                                      imageUrl={channel().imageUrl}
+                                    />
+                                    <SidebarAgentIndicator state={channelBadge} />
+                                  </span>
+                                  <span class="agent-row-copy sidebar-pinned-copy">
+                                    <strong class="sidebar-pinned-name" title={name()}>
+                                      {name()}
+                                    </strong>
+                                    <Show when={channel().title.trim()}>
+                                      {(label) => (
+                                        <Badge class="sidebar-pinned-title" title={label()}>
+                                          <span>{label()}</span>
+                                        </Badge>
+                                      )}
+                                    </Show>
+                                  </span>
+                                  <Show when={channel().unreadCount > 0}>
+                                    <span class="sr-only">
+                                      {t("sidebar.channel.unread", { count: channel().unreadCount })}
+                                    </span>
+                                  </Show>
+                                </>
+                              )}
+                            </Match>
+                          </Switch>
+                        </ContextMenu.Trigger>
+                        <Switch>
+                          <Match when={item.chat.kind === "agent" ? item.chat.agent : undefined}>
+                            {(agent) => <SidebarAgentContextMenu agent={agent()} pinned={true} />}
+                          </Match>
+                          <Match when={item.chat.kind === "channel" ? item.chat.channel : undefined}>
+                            {(channel) => <SidebarChannelContextMenu channel={channel()} pinned={true} />}
+                          </Match>
+                        </Switch>
+                      </ContextMenu.Root>
+                    }
+                  >
+                    {(agent) => <SidebarAgentRow agent={agent()} pinned />}
+                  </Show>
                 </li>
               );
             }}

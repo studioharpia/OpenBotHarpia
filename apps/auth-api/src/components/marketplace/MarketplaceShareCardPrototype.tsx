@@ -3,11 +3,10 @@ import type { MarketplaceAgentSummary } from "@openbot/contracts/ipc";
 import { ShieldCheck } from "@openbot/ui/icons";
 import type { JSX } from "@solidjs/web";
 import { createSignal, Loading, lazy, onSettled, Show } from "solid-js";
+import { loadClientAgentAvatar } from "../client-agent-avatar";
 import { isVerifiedAgent } from "./marketplace-prototype-fixtures";
 
-const AgentAvatar = lazy(() =>
-  import("@openbot/ui/features/agents/AgentAvatar").then((module) => ({ default: module.AgentAvatar })),
-);
+const AgentAvatar = lazy(loadClientAgentAvatar);
 
 /*
  * Prototype of the image a shared `openbot.run/marketplace/agents/<id>` link shows: 1200 × 630, the

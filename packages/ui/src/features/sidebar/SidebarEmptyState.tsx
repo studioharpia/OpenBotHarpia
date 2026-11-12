@@ -15,9 +15,15 @@ export function SidebarEmptyState() {
   const { t } = useText();
   return (
     <Show
-      when={props.emptyAction}
+      when={!props.unreadOnly && props.emptyAction}
       fallback={
-        <p class="empty-search">{props.agentsConnecting ? t("common.connecting") : t("sidebar.empty.noAgents")}</p>
+        <p class="empty-search">
+          {props.unreadOnly
+            ? t("sidebar.empty.noUnread")
+            : props.agentsConnecting
+              ? t("common.connecting")
+              : t("sidebar.empty.noAgents")}
+        </p>
       }
     >
       {(action) => (

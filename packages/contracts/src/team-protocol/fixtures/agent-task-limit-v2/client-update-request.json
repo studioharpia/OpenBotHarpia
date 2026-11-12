@@ -1,0 +1,5 @@
+{
+  "method": "POST",
+  "path": "/v2/admin/agents/task-limit/update",
+  "body": { "agentId": "agent-fixture", "taskLimit": 10 }
+}

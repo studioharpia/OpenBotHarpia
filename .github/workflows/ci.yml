@@ -189,6 +189,19 @@ jobs:
       - name: Run the browser steps E2E
         run: xvfb-run -a bun run test:browser-steps
 
+      - name: Run browser screenshot attachment E2E
+        run: xvfb-run -a bun scripts/browser-screenshot-attachment-e2e.ts
+
+      - name: Upload browser screenshot attachment evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-screenshot-attachment-e2e
+          path: |
+            .openbot-build/browser-screenshot-attachment-e2e/report.json
+            .openbot-build/browser-screenshot-attachment-e2e/capture.png
+          if-no-files-found: ignore
+
       - name: Run the browser dialogs E2E
         run: xvfb-run -a bun run test:browser-dialogs
 
@@ -413,6 +426,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: bun run test:turn-input
 
+      - name: Validar o limite de tópicos paralelos
+        if: ${{ !cancelled() }}
+        run: bun run test:agent-task-limit
+
+      - name: Run the conversation session cache E2E test
+        if: ${{ !cancelled() }}
+        run: bun scripts/conversation-session-cache-e2e.ts
+
       - name: Run the zero-filled settings file E2E test
         if: ${{ !cancelled() }}
         run: bun run test:zero-filled-settings
@@ -492,6 +513,29 @@ jobs:
       - name: Run the agent channel creation E2E test
         if: ${{ !cancelled() }}
         run: bun run test:agent-channel-create
+
+      - name: Run the channel session isolation E2E test
+        if: ${{ !cancelled() }}
+        run: bun scripts/channel-session-isolation-e2e.ts
+
+      - name: Run the agent task rename E2E test
+        if: ${{ !cancelled() }}
+        run: bun scripts/agent-task-rename-e2e.ts
+
+      - name: Run the agent task transfer E2E test
+        if: ${{ !cancelled() }}
+        run: bun scripts/agent-task-transfer-e2e.ts
+
+      - name: Run task completion analytics E2E
+        if: ${{ !cancelled() }}
+        run: bun scripts/task-completion-analytics-e2e.ts
+
+      - name: Verify persistent account endpoints
+        run: bun scripts/account-service-endpoints-e2e.ts
+
+      - name: Run task message actions E2E
+        if: ${{ !cancelled() }}
+        run: bun scripts/agent-thread-unread-service-e2e.ts
 
       - name: Run the agent workflow gate E2E test
         if: ${{ !cancelled() }}
@@ -655,6 +699,12 @@ jobs:
         with:
           name: reverse-actions-e2e
           path: |
+            .openbot-build/conversation-session-cache-e2e/
+            .openbot-build/agent-task-rename-e2e/
+            .openbot-build/task-completion-analytics-e2e/
+            .openbot-build/account-service-endpoints-e2e/
+            .openbot-build/agent-thread-unread-service-e2e/
+            .openbot-build/agent-task-transfer-e2e/
             .openbot-build/team-api-legacy-clients-e2e/
             .openbot-build/team-session-revoke-e2e/
             .openbot-build/sign-in-relay-paste-e2e/
@@ -676,6 +726,7 @@ jobs:
             .openbot-build/messaging-telegram-mentions-e2e/
             .openbot-build/messaging-slack-ping-reply-e2e/
             .openbot-build/turn-input-e2e/
+            .openbot-build/agent-task-limit-e2e/
             .openbot-build/zero-filled-settings-e2e/
             .openbot-build/provider-update-busy-e2e/
             .openbot-build/provider-update-after-app-upgrade-e2e/
@@ -695,6 +746,7 @@ jobs:
             .openbot-build/agent-webhook-routine-e2e/
             .openbot-build/agent-channel-manage-e2e/
             .openbot-build/agent-channel-create-e2e/
+            .openbot-build/channel-session-isolation-e2e/
             .openbot-build/agent-workflow-gate-e2e/
             .openbot-build/agent-profile-accounts-e2e/
             .openbot-build/browser-profile-agents-e2e/
@@ -1037,6 +1089,20 @@ jobs:
       - name: Check API
         run: bun run check:api
 
+      - name: Build standalone account service
+        run: bun run --cwd apps/auth-api build:vps
+
+      - name: Exercise standalone account service
+        run: bun run --cwd apps/auth-api test:vps
+
+      - name: Upload standalone account evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: account-vps-e2e
+          path: .openbot-build/vps-*-e2e/report.json
+          if-no-files-found: ignore
+
       - name: Upload preview build
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1096,7 +1162,8 @@ jobs:
 
   deploy-production:
     name: Deploy Cloudflare production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # The HARPIA repository keeps CI, but publishing its source must not deploy the upstream service.
+    if: github.repository == 'nightly-labs/openbot' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     # `surfaces` gates the deploy even though the Worker it ships lives in
     # `apps/auth-api`, which `api` already covers: mobile, the site router, the
     # team client and the remote stack all consume the account API, so a red

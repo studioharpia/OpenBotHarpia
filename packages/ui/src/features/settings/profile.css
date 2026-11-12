@@ -635,3 +635,18 @@
     transform: scaleX(0);
   }
 }
+
+/* The compact month fills the chosen number of rows; only the final row can contain neutral padding. */
+.profile-heatmap[data-compact] {
+  gap: 0;
+}
+
+.profile-heatmap[data-compact] :is(.profile-heatmap-months, .profile-heatmap-legend) {
+  display: none;
+}
+
+.profile-heatmap[data-compact] .profile-heatmap-grid {
+  grid-template-columns: repeat(var(--profile-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--profile-compact-rows), auto);
+  grid-auto-flow: row;
+}

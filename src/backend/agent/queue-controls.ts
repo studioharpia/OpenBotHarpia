@@ -23,8 +23,10 @@ import type { MailboxSync } from "./mailbox-sync";
 import type { ProviderRuntime } from "./provider-runtime";
 import type { RoutineScheduler } from "./routine-scheduler";
 import { providerForAgent } from "./thread-items";
+import type { SteerTimingEvent } from "./turn-traces";
 
 export interface QueueControlsHooks {
+  onSteerTiming?(event: SteerTimingEvent): void;
   /** The channel task that owns a delivery. Read late: the channel service is built after this. */
   channelAssignment(deliveryId: string): ChannelAssignment | null;
   /**
@@ -286,6 +288,8 @@ export class QueueControls {
     }
     yield* this.#mailbox.markSteering(input.deliveryId, turnId).pipe(toQueueOperationFailed);
     this.#mailboxSync.emitQueue(agent.id);
+    const timing = { agentId: agent.id, turnId, deliveryId: input.deliveryId, createdAt: context.delivery.createdAt };
+    this.#hooks.onSteerTiming?.({ ...timing, stage: "sent" });
     yield* client
       .request(
         "turn/steer",
@@ -306,6 +310,8 @@ export class QueueControls {
       )
       .pipe(
         toQueueOperationFailed,
+        Effect.tap(() => Effect.sync(() => this.#hooks.onSteerTiming?.({ ...timing, stage: "accepted" }))),
+        Effect.tapError(() => Effect.sync(() => this.#hooks.onSteerTiming?.({ ...timing, stage: "failed" }))),
         // The turn may have ended while the request was in flight, and found nothing else to start
         // with this message out of the queue, so the drain is asked again.
         Effect.tapError(() =>

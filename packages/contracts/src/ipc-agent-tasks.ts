@@ -6,12 +6,13 @@ import {
   type ConversationSnapshot,
   isConversationReadState,
   isConversationSnapshot,
+  type SetMessageReactionInput,
 } from "./ipc-conversations";
 import { isQueueDelivery, type QueueDelivery } from "./ipc-queue";
 import { isDynamicRecord, isOneOf } from "./runtime-values";
 
 /** The most tasks of one agent that run a turn at the same time, next to the agent's own chat. */
-export const AGENT_TASK_LIMIT_MAX = 4;
+export const AGENT_TASK_LIMIT_MAX = 10;
 /** The task limit of an agent that has no limit of its own. */
 export const AGENT_TASK_LIMIT_DEFAULT = 4;
 
@@ -183,6 +184,12 @@ export interface BranchAgentTaskInput {
   requestId: string;
 }
 
+/** Moves a side task to another agent on the same host, keeping its thread and read cursors. */
+export interface TransferAgentTaskInput extends AgentTaskInput {
+  targetAgentId: string;
+  requestId: string;
+}
+
 /** A person's new title for a side thread. */
 export interface RenameAgentTaskInput extends AgentTaskInput {
   title: string;
@@ -191,6 +198,16 @@ export interface RenameAgentTaskInput extends AgentTaskInput {
 /** Moves the person's read mark of a side thread to a message of that thread. */
 export interface MarkAgentTaskReadInput extends AgentTaskInput {
   throughMessageId: string;
+}
+
+/** Rewinds only this person's read cursor in the named side thread. */
+export interface MarkAgentTaskUnreadInput extends AgentTaskInput {
+  fromMessageId: string;
+}
+
+/** Changes the user's reaction to a message in the named side thread. */
+export interface SetAgentTaskMessageReactionInput extends SetMessageReactionInput {
+  taskId: string;
 }
 
 /** The person's read mark of one side thread, by its task id. */

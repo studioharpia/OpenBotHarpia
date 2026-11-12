@@ -1,12 +1,12 @@
-import { BloubBot, type ExpressionId, POSES } from "@norbert_bodziony/bloub";
-import { PlushBot, type PlushState, type PlushTransition } from "@norbert_bodziony/bloub/plush";
+import { EXPRESSIONS, type ExpressionId, POSES } from "@norbert_bodziony/bloub";
+import type { PlushState, PlushTransition } from "@norbert_bodziony/bloub/plush";
 import { type AvatarMood, avatarMoodPresentation, type ShapeSafeStateId } from "@openbot/brand/bloub-avatar-motion";
 import type { AgentStepActivity, AvatarColor, AvatarHue } from "@openbot/contracts/ipc";
 import { prefersReducedMotion } from "@openbot/ui/utils";
 import { createEffect, createMemo, createSignal, onSettled, Show } from "solid-js";
 import { useAmbientMotion } from "../../ambient-motion";
+import type { AvatarExpressionId } from "../../avatar-catalog";
 import {
-  AVATAR_EXPRESSIONS,
   type AvatarMotion,
   avatarStyleForSeed,
   bloubAvatarProfile,
@@ -15,6 +15,7 @@ import {
 import type { AgentProfile } from "../../data";
 import { documentFocused } from "../../document-focus";
 import { documentSoftwareRendering } from "../../document-rendering";
+import { AvatarFlat, AvatarPlush } from "./AvatarArt";
 
 // Cap avatar animation at 30fps: uncapped bloub clocks measured 30% renderer / 24% GPU
 // for two visible avatars. The shape is 24-40px, so the eye cannot see the difference.
@@ -132,7 +133,7 @@ interface AgentAvatarProps {
   animationOffset?: number;
   shape?: SupportedAvatarSilhouetteId;
   /** The resting eyes, in place of the seed's. A mood with its own face still shows that face. */
-  expression?: ExpressionId;
+  expression?: AvatarExpressionId;
   /**
    * How a new shape or colour comes in. `cut` swaps it at once: use it where many avatars change
    * together, such as a picker grid, so that they do not all animate at the same time.
@@ -236,7 +237,7 @@ function GeneratedAvatar(props: {
   mood: AvatarMood;
   animationOffset?: number | undefined;
   shape?: SupportedAvatarSilhouetteId | undefined;
-  expression?: ExpressionId | undefined;
+  expression?: AvatarExpressionId | undefined;
   transition: PlushTransition;
   followPointer: boolean;
   workingFaces: boolean;
@@ -392,7 +393,7 @@ function GeneratedAvatar(props: {
   // pose on screen and resumes from it, and a change made while it rests still plays to its end. So a
   // new shape or colour always pops: the old body shrinks away and the new one springs out.
   const avatar = () => (
-    <PlushBot
+    <AvatarPlush
       size={100}
       shape={appearance().shape}
       color={appearance().color}
@@ -414,7 +415,7 @@ function GeneratedAvatar(props: {
   );
 
   const flatAvatar = () => (
-    <BloubBot
+    <AvatarFlat
       size={100}
       shape={flatAppearance().shape}
       color={flatAppearance().color}
@@ -441,7 +442,7 @@ function GeneratedAvatar(props: {
              at once, with no transition. */
         <Show when={appearance()} keyed>
           {(frozen) => (
-            <PlushBot
+            <AvatarPlush
               size={100}
               shape={frozen.shape}
               color={frozen.color}
@@ -477,7 +478,7 @@ function GeneratedAvatar(props: {
           fallback={
             <Show when={flatAppearance()} keyed>
               {(frozen) => (
-                <BloubBot
+                <AvatarFlat
                   size={100}
                   shape={frozen.shape}
                   color={frozen.color}
@@ -499,14 +500,14 @@ function GeneratedAvatar(props: {
 }
 
 /** A hover face that differs from the resting eyes and from the face the last hover showed. */
-function randomHoverFace(previous: HoverFace | null, resting: ExpressionId): HoverFace {
+function randomHoverFace(previous: HoverFace | null, resting: AvatarExpressionId): HoverFace {
   const choices = HOVER_FACES.filter((face) => face !== previous && face.expression !== resting);
   return choices[Math.floor(Math.random() * choices.length)] ?? HOVER_WINK;
 }
 
 /** A random working face other than the one on screen, so each change shows. */
 function nextWorkingFace(current: ExpressionId | null): ExpressionId {
-  const choices = AVATAR_EXPRESSIONS.filter((face) => face !== current);
+  const choices = EXPRESSIONS.map((entry) => entry.id).filter((face) => face !== current);
   return choices[Math.floor(Math.random() * choices.length)] ?? "attentif";
 }
 

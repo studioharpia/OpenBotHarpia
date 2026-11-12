@@ -47,7 +47,7 @@ export function ConversationView(props: ConversationProps) {
     const mode = activeRightPanel();
     if (mode === "browser") return browserSidebarOpen();
     if (mode === "file-preview") return filePreviewOpen();
-    return sidePanelOpen() && mode !== "settings";
+    return sidePanelOpen() && mode !== "settings" && mode !== "central";
   };
   const folderCalls = agentFolderCalls();
   /**
@@ -91,7 +91,7 @@ export function ConversationView(props: ConversationProps) {
             "side-panel-maximized": sidePanelOpen() && sidePanel().maximized,
           },
         ]}
-        style={`--settings-panel-width: ${settingsPanelWidth()}px; --browser-panel-width: ${browserPanelWidth()}px; --side-panel-width: ${settingsOpen() ? settingsPanelWidth() : browserPanelWidth()}px`}
+        style={`--settings-panel-width: ${settingsPanelWidth()}px; --browser-panel-width: ${browserPanelWidth()}px; --side-panel-width: ${settingsOpen() || activeRightPanel() === "central" ? settingsPanelWidth() : browserPanelWidth()}px`}
         onDragEnter={(event) => {
           if (!props.globalOverlayOpen && event.dataTransfer?.types.includes("Files")) setDropActive(true);
         }}

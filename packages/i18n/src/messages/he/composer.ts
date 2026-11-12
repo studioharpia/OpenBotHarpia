@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "פעולות תבנית",
+  "composer.templates.hint": "הקלד / בשיחה כדי להוסיף פרומפט שמור.",
+  "composer.templates.new": "תבנית חדשה",
+  "composer.templates.empty": "אין תבניות.",
+  "composer.templates.editor": "תבנית פרומפט",
+  "composer.templates.name": "שם",
+  "composer.templates.prompt": "פרומפט",
+  "composer.templates.storageError": "לא ניתן לקרוא או לשמור תבניות.",
+  "composer.templates.delete": "למחוק את התבנית?",
+  "composer.templates.noMatch": "לא נמצאו תבניות.",
+  "composer.templates.list": "תבניות פרומפטים",
   "composer.queueEdit.body": "הודעה בתור נמצאת בעריכה. יש לשמור את העריכה או לבטל אותה כדי שההודעה תרוץ.",
   "composer.queueEdit.cancel": "ביטול העריכה",
   "composer.providerWait.offlineTitle": "אין חיבור לאינטרנט",
@@ -74,6 +85,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "הודעה אל הסוכן",
   "composer.placeholder.answer": "הקלדת התשובה",
   "composer.add.label": "הוספה להנחיה",
+  "composer.add.queue": "הוספת הודעה לתור",
   "composer.add.files": "צירוף קבצים",
   "composer.add.skill": "שימוש במיומנות",
   "composer.upload.cancel": "ביטול ההעלאה",

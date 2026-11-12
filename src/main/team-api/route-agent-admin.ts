@@ -29,6 +29,10 @@ import {
   AGENT_TASK_LIMIT_CAPABILITY,
   AGENT_TASK_LIMIT_ROUTES,
 } from "@openbot/contracts/team-protocol/agent-task-limit-v1";
+import {
+  AGENT_TASK_LIMIT_V2_CAPABILITY,
+  AGENT_TASK_LIMIT_V2_ROUTES,
+} from "@openbot/contracts/team-protocol/agent-task-limit-v2";
 import { sourceText } from "@openbot/i18n/source";
 import { runCauseEffect } from "../../backend/effect-boundary";
 import { AgentNotFoundError } from "../agent-admin-settings";
@@ -159,18 +163,24 @@ export async function routeAgentTaskLimit(
   hiddenAgentIds: ReadonlySet<string>,
 ): Promise<RouteOutcome> {
   const { method, url, capabilities, member, request, json } = context;
-  const read = method === "POST" && url.pathname === AGENT_TASK_LIMIT_ROUTES.settings;
-  const update = method === "POST" && url.pathname === AGENT_TASK_LIMIT_ROUTES.update;
+  const extended =
+    url.pathname === AGENT_TASK_LIMIT_V2_ROUTES.settings || url.pathname === AGENT_TASK_LIMIT_V2_ROUTES.update;
+  const routes = extended ? AGENT_TASK_LIMIT_V2_ROUTES : AGENT_TASK_LIMIT_ROUTES;
+  const read = method === "POST" && url.pathname === routes.settings;
+  const update = method === "POST" && url.pathname === routes.update;
   if (!read && !update) return "unmatched";
   const settings = admin?.agentHost;
-  if (!settings || !capabilities.has(AGENT_TASK_LIMIT_CAPABILITY))
+  if (!settings || !capabilities.has(extended ? AGENT_TASK_LIMIT_V2_CAPABILITY : AGENT_TASK_LIMIT_CAPABILITY))
     throw new HttpError(400, sourceText("error.team.agentSettingsUnsupported"));
   requireAdmin(member);
   // `readJson` has already run the body through the agent-task-limit wire codec.
   const body = await readJson(request);
   requireVisibleBodyAgent(body, hiddenAgentIds);
   try {
-    if (read) return json(200, settings.readTaskLimit(stringField(body, "agentId")));
+    if (read) {
+      const value = settings.readTaskLimit(stringField(body, "agentId"));
+      return json(200, extended || value.taskLimit === null ? value : { taskLimit: Math.min(value.taskLimit, 4) });
+    }
     let input: ReturnType<typeof parseUpdateAgentTaskLimitInput>;
     try {
       input = parseUpdateAgentTaskLimitInput(body);

@@ -15,6 +15,7 @@ import {
   type BranchAgentTaskInput,
   type ConversationMessage,
   type ConversationSnapshot,
+  type TransferAgentTaskInput,
 } from "@openbot/contracts/ipc";
 import { sourceText } from "@openbot/i18n/source";
 import { createOpenBotLogger } from "@openbot/logging";
@@ -48,13 +49,27 @@ const AGENT_STARTED_UNFINISHED_TASKS = 8;
 const AGENT_STARTED_FINISHED_KEPT = 8;
 
 export const START_TASK_TOOL = "start_task";
+export const RENAME_TASK_TOOL = "rename_task";
+export const TRANSFER_TASK_TOOL = "transfer_task";
 
 export const startTaskToolSchema = z.strictObject({
   title: z.string().trim().min(1).max(INPUT_LIMITS.agentTaskTitle),
   brief: z.string().trim().min(1).max(INPUT_LIMITS.messageText),
 });
 
+export const renameTaskToolSchema = z.strictObject({
+  taskId: z.string().trim().min(1).max(INPUT_LIMITS.identifier),
+  title: z.string().trim().min(1).max(INPUT_LIMITS.agentTaskTitle),
+});
+
+export const transferTaskToolSchema = z.strictObject({
+  taskId: z.string().trim().min(1).max(INPUT_LIMITS.identifier),
+  targetAgentId: z.string().trim().min(1).max(INPUT_LIMITS.identifier),
+});
+
 export interface AgentTasksHooks {
+  /** The service owns session teardown and the atomic mailbox/thread transfer. */
+  transfer(input: TransferAgentTaskInput): Effect.Effect<void, { readonly cause: unknown }>;
   emit(event: AgentEvent): void;
   /** The agent, for its provider and its task limit. */
   agent(agentId: string): AgentSummary | undefined;
@@ -68,7 +83,7 @@ export interface AgentTasksHooks {
   archived(agentId: string, tasks: readonly AgentThreadRecord[]): Effect.Effect<void>;
 }
 
-/** Where `start_task` was called, as the tool router knows it. */
+/** The trusted identity and context of a task tool call, supplied by the tool router. */
 export interface AgentTaskCaller {
   agentId: string;
   /** A channel, messaging or task turn: only the agent's own chat starts a task. */
@@ -107,6 +122,7 @@ export class AgentTasks implements TaskLanes {
   readonly #conversation: ConversationRuntime;
   readonly #hooks: AgentTasksHooks;
   /** The last progress line of each running task turn, by task id. */
+  readonly #taskChanges = new Set<string>();
   readonly #progress = new Map<string, string>();
   /** The last turn of each task that the user stopped, by task id. */
   readonly #stoppedTurns = new Map<string, string>();
@@ -126,7 +142,7 @@ export class AgentTasks implements TaskLanes {
 
   threadId(taskId: string): string | null {
     const task = this.#store.task(taskId);
-    return task && task.closedAt === null ? task.threadId : null;
+    return task && task.closedAt === null && !this.#taskChanges.has(taskId) ? task.threadId : null;
   }
 
   openTaskIds(agentId: string): readonly string[] {
@@ -170,11 +186,33 @@ export class AgentTasks implements TaskLanes {
 
   /** The open task of this agent, ready for a message. */
   requireOpen(agentId: string, taskId: string): AgentThreadRecord {
+    if (this.#taskChanges.has(taskId)) throw new Error(sourceText("error.backend.threadStillRunning"));
     const task = this.#store.task(taskId);
     if (!task || task.agentId !== agentId) throw new Error(sourceText("error.backend.threadNotFound"));
     if (task.closedAt !== null) throw new Error(sourceText("error.backend.threadArchived"));
     this.#conversation.registerTaskThread(agentId, task.threadId);
     return task;
+  }
+
+  /** Holds the lane synchronously before any provider-release await. No send or second move may enter it. */
+  beginTaskChange(agentId: string, taskId: string): AgentThreadRecord {
+    if (this.#taskChanges.has(taskId)) throw new Error(sourceText("error.backend.threadStillRunning"));
+    const task = this.require(agentId, taskId);
+    this.#taskChanges.add(taskId);
+    return task;
+  }
+
+  endTaskChange(taskId: string): void {
+    this.#taskChanges.delete(taskId);
+  }
+
+  requireMutable(agentId: string, taskId: string): AgentThreadRecord {
+    if (this.#taskChanges.has(taskId)) throw new Error(sourceText("error.backend.threadStillRunning"));
+    return this.require(agentId, taskId);
+  }
+
+  transfer(input: TransferAgentTaskInput, commandId: string): void {
+    this.#store.transfer(input, commandId);
   }
 
   /** The side threads of this agent, open and archived, with activity at or after `after`. The latest first. */
@@ -360,12 +398,13 @@ export class AgentTasks implements TaskLanes {
     this.#store.delete(task.taskId);
   }
 
-  /** A rename by a person: trimmed, and kept when later messages arrive. */
-  rename(task: AgentThreadRecord, title: string): void {
+  /** An explicit rename, kept when later messages arrive. Existing callers rename as the person. */
+  rename(task: AgentThreadRecord, title: string, titleSource: "user" | "agent" = "user"): void {
+    this.requireMutable(task.agentId, task.taskId);
     const trimmed = title.trim();
     if (!trimmed || trimmed.length > INPUT_LIMITS.agentTaskTitle)
       throw new Error(sourceText("error.backend.threadTitleRequired"));
-    this.#store.rename(task.threadId, trimmed);
+    this.#store.rename(task.threadId, trimmed, titleSource);
     this.changed(task.agentId);
   }
 
@@ -374,6 +413,7 @@ export class AgentTasks implements TaskLanes {
    * and releases its provider sessions first.
    */
   delete(task: AgentThreadRecord): void {
+    this.require(task.agentId, task.taskId);
     this.#progress.delete(task.taskId);
     this.#stoppedTurns.delete(task.taskId);
     this.#turnEndWaiters.delete(task.taskId);
@@ -512,7 +552,7 @@ export class AgentTasks implements TaskLanes {
   }
 
   /**
-   * Answers `start_task`; null for every other tool. The brief is the task's first message, sent by
+   * Answers the task tools; null for every other tool. The brief is the task's first message, sent by
    * the agent to itself, so the task conversation shows the agent as its author. A retried call
    * returns the task that the first call started.
    */
@@ -521,6 +561,40 @@ export class AgentTasks implements TaskLanes {
     params: DynamicToolCallParams,
     caller: AgentTaskCaller,
   ): Effect.fn.Return<OpenBotToolResponse | null> {
+    if (params.tool === TRANSFER_TASK_TOOL) {
+      const parsed = transferTaskToolSchema.safeParse(params.arguments);
+      if (!parsed.success) return openBotToolFailure(sourceText("error.backend.taskTransferInvalid"));
+      if (caller.inExecutionThread) return openBotToolFailure(sourceText("error.backend.taskTransferOwnChatOnly"));
+      const requestId = `transfer-task:${createHash("sha256")
+        .update(JSON.stringify([caller.agentId, params.threadId, params.turnId, params.callId]))
+        .digest("hex")}`;
+      return yield* this.#hooks.transfer({ agentId: caller.agentId, ...parsed.data, requestId }).pipe(
+        Effect.as(openBotToolResult({ status: "transferred", ...parsed.data })),
+        Effect.catch((failure) => {
+          const message = failure.cause instanceof Error ? failure.cause.message : "";
+          const safe = [
+            sourceText("error.backend.threadNotFound"),
+            sourceText("error.backend.threadTransferBusy"),
+            sourceText("error.backend.threadTransferRoutine"),
+            sourceText("error.backend.threadOpenLimitReached", { count: INPUT_LIMITS.agentTasks }),
+          ];
+          return Effect.succeed(
+            openBotToolFailure(safe.includes(message) ? message : sourceText("error.backend.taskTransferFailed")),
+          );
+        }),
+      );
+    }
+    if (params.tool === RENAME_TASK_TOOL) {
+      const parsed = renameTaskToolSchema.safeParse(params.arguments);
+      if (!parsed.success) return openBotToolFailure(sourceText("error.backend.taskRenameInvalid"));
+      return yield* storedSync(() => {
+        const task = this.#store.task(parsed.data.taskId);
+        if (!task || task.agentId !== caller.agentId || task.origin !== "agent" || task.routineId !== null)
+          return openBotToolFailure(sourceText("error.backend.threadNotFound"));
+        if (task.title !== parsed.data.title) this.rename(task, parsed.data.title, "agent");
+        return openBotToolResult({ status: "renamed", taskId: task.taskId, title: parsed.data.title });
+      }).pipe(Effect.catch(() => Effect.succeed(openBotToolFailure(sourceText("error.backend.taskRenameFailed")))));
+    }
     if (params.tool !== START_TASK_TOOL) return null;
     const parsed = startTaskToolSchema.safeParse(params.arguments);
     if (!parsed.success) return openBotToolFailure(sourceText("error.backend.taskToolInvalid"));
@@ -549,10 +623,9 @@ export class AgentTasks implements TaskLanes {
     const finished = open.filter((task) => this.#finished(task));
     // A routine thread is the routine's own: its runs do not count as tasks that the agent started.
     const unfinishedTasks = open.filter((task) => task.routineId === null && !finished.includes(task)).length;
-    if (unfinishedTasks >= AGENT_STARTED_UNFINISHED_TASKS)
-      return openBotToolFailure(
-        sourceText("error.backend.taskUnfinishedLimit", { count: AGENT_STARTED_UNFINISHED_TASKS }),
-      );
+    const unfinishedLimit = Math.max(AGENT_STARTED_UNFINISHED_TASKS, this.limit(caller.agentId));
+    if (unfinishedTasks >= unfinishedLimit)
+      return openBotToolFailure(sourceText("error.backend.taskUnfinishedLimit", { count: unfinishedLimit }));
     // The newest finished tasks that the agent started stay open, when the task list has a place for them
     // and for the new task. The person's own tasks, branches and routine threads stay open.
     const finishedByAgent = finished
@@ -665,6 +738,7 @@ export class AgentTasks implements TaskLanes {
   /** No turn runs in the task, and no message is queued for it. */
   #finished(task: AgentThreadRecord): boolean {
     return (
+      !this.#taskChanges.has(task.taskId) &&
       !this.#conversation.loadedExecutionSnapshot(task.threadId)?.activeTurnId &&
       !this.#hooks.turnActive(task.agentId, task.threadId) &&
       !this.#mailbox.taskBusy(task.agentId, task.taskId)
@@ -717,6 +791,10 @@ export class AgentTasks implements TaskLanes {
   #publicBranch(task: AgentThreadRecord): AgentTaskBranch | null {
     if (!task.branch) return null;
     const { sourceThreadId, sourceMessageId, throughMessageId } = task.branch;
+    const sourceOwner = this.#store.ownerOfThread(sourceThreadId);
+    // The released branch link navigates within one agent. Keep the internal origin, but do not
+    // point the destination agent's UI at another agent's conversation.
+    if (sourceOwner && sourceOwner !== task.agentId) return null;
     if (this.#hooks.agent(task.agentId)?.threadId === sourceThreadId)
       return { sourceTaskId: null, sourceTitle: null, sourceMessageId, throughMessageId };
     const source = this.#store.taskForThread(sourceThreadId);

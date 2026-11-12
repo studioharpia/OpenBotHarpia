@@ -17,6 +17,7 @@ import {
   RemoteControlPlane,
   type RemoteFailure,
 } from "./remote-control-plane";
+import { withAccountRequest } from "./request-context";
 import { SalesAnalyticsDelivery } from "./sales-analytics-delivery";
 import { checkSignalEntry, SIGNAL_ENTRY_CRON, type SignalEntryBindings } from "./signal-entry-failover";
 import type { WorkerBindings } from "./types";
@@ -42,54 +43,56 @@ export function createWorkerHandler(
         >,
       context?: WorkerExecutionContext,
     ) {
-      const bindings = workerBindings.DB ? { ...workerBindings, DB: observedD1(workerBindings.DB) } : workerBindings;
-      const hostRedirect = canonicalHostRedirect(request);
-      if (hostRedirect) return hostRedirect;
-      if (request.method === "GET" && new URL(request.url).pathname === "/billing/checkout-return") {
-        return runApiEffect(checkoutReturnResponse(request, bindings));
-      }
-      const earlyResponse = await runApiEffect(
-        Effect.gen(function* () {
-          const localSiteResponse = yield* serveLocalHostedSite(request, bindings);
-          if (localSiteResponse) return localSiteResponse;
-          yield* enforceMarketplaceIngress(request, bindings);
-          return null;
-        }).pipe(
-          Effect.catchIf(
-            (error) => error instanceof MarketplaceRateLimitError,
-            (error) =>
-              Effect.succeed(
-                Response.json(
-                  { error: { code: error.code, message: error.message } },
-                  {
-                    status: error.status,
-                    headers: {
-                      "Cache-Control": "no-store",
-                      "Retry-After": String(error.retryAfterSeconds),
-                      "X-Content-Type-Options": "nosniff",
+      return withAccountRequest(workerBindings, context?.waitUntil.bind(context), async () => {
+        const bindings = workerBindings.DB ? { ...workerBindings, DB: observedD1(workerBindings.DB) } : workerBindings;
+        const hostRedirect = canonicalHostRedirect(request);
+        if (hostRedirect) return hostRedirect;
+        if (request.method === "GET" && new URL(request.url).pathname === "/billing/checkout-return") {
+          return runApiEffect(checkoutReturnResponse(request, bindings));
+        }
+        const earlyResponse = await runApiEffect(
+          Effect.gen(function* () {
+            const localSiteResponse = yield* serveLocalHostedSite(request, bindings);
+            if (localSiteResponse) return localSiteResponse;
+            yield* enforceMarketplaceIngress(request, bindings);
+            return null;
+          }).pipe(
+            Effect.catchIf(
+              (error) => error instanceof MarketplaceRateLimitError,
+              (error) =>
+                Effect.succeed(
+                  Response.json(
+                    { error: { code: error.code, message: error.message } },
+                    {
+                      status: error.status,
+                      headers: {
+                        "Cache-Control": "no-store",
+                        "Retry-After": String(error.retryAfterSeconds),
+                        "X-Content-Type-Options": "nosniff",
+                      },
                     },
-                  },
+                  ),
                 ),
-              ),
-          ),
-        ),
-      );
-      if (earlyResponse) return earlyResponse;
-      // Drawn from the HTML pages, so it renders them through the same handler.
-      const markdown = await pageMarkdownResponse(request, fetchHandler);
-      if (markdown) return markdown;
-      const response = Promise.resolve(fetchHandler(request)).then((result) =>
-        permanentTrailingSlashRedirect(request, result),
-      );
-      if (context && isEmailSignInStart(request)) {
-        context.waitUntil(
-          response.then(
-            () => undefined,
-            () => undefined,
+            ),
           ),
         );
-      }
-      return response;
+        if (earlyResponse) return earlyResponse;
+        // Drawn from the HTML pages, so it renders them through the same handler.
+        const markdown = await pageMarkdownResponse(request, fetchHandler);
+        if (markdown) return markdown;
+        const response = Promise.resolve(fetchHandler(request)).then((result) =>
+          permanentTrailingSlashRedirect(request, result),
+        );
+        if (context && isEmailSignInStart(request)) {
+          context.waitUntil(
+            response.then(
+              () => undefined,
+              () => undefined,
+            ),
+          );
+        }
+        return response;
+      });
     },
     async scheduled(
       controller: Pick<ScheduledController, "scheduledTime"> & Partial<Pick<ScheduledController, "cron">>,

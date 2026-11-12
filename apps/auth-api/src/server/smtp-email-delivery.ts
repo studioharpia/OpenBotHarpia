@@ -1,5 +1,5 @@
 import { INPUT_LIMITS } from "@openbot/contracts/input-limits";
-import { isCanonicalInviteUrl } from "@openbot/contracts/invite-links";
+import { type InviteLinkOptions, isCanonicalInviteUrl } from "@openbot/contracts/invite-links";
 import { isValidHostname as isSharedValidHostname } from "@openbot/contracts/validation";
 import { Effect, Fiber, Option, Result, Schema } from "effect";
 import {
@@ -153,6 +153,7 @@ export const prepareEmailCode = Effect.fn("Email.prepareCode")(function* (
 
 export const prepareTeamInvite = Effect.fn("Email.prepareTeamInvite")(function* (
   message: SmtpTeamInviteMessage,
+  inviteLinks: InviteLinkOptions = {},
 ): Effect.fn.Return<PreparedEmailMessage, SmtpFailure> {
   yield* smtpValidate(() => {
     validateEmail(message.email, "recipient");
@@ -164,7 +165,10 @@ export const prepareTeamInvite = Effect.fn("Email.prepareTeamInvite")(function* 
     ) {
       throw new Error("smtp_invalid_server_name");
     }
-    if (!isCanonicalInviteUrl(message.inviteUrl)) {
+    if (
+      !isCanonicalInviteUrl(message.inviteUrl, inviteLinks) ||
+      (inviteLinks.selfHostedApiOrigin && new URL(message.inviteUrl).origin !== inviteLinks.selfHostedApiOrigin)
+    ) {
       throw new Error("smtp_invalid_invite_url");
     }
   });
@@ -602,7 +606,10 @@ const writeCommand = Effect.fn("SmtpEmail.writeCommand")(
 function validateConfig(config: SmtpEmailConfig): void {
   if (!isValidHostname(config.host)) throw new Error("smtp_invalid_host");
   if (config.port !== 465) throw new Error("smtp_port_must_be_465");
-  validateEmail(config.username, "username");
+  // Resend authenticates with a fixed service login; it is not a mailbox address.
+  if (!(config.host.toLowerCase() === "smtp.resend.com" && config.username === "resend")) {
+    validateEmail(config.username, "username");
+  }
   validateEmail(config.from, "sender");
   if (!config.password || hasHeaderBreak(config.password)) throw new Error("smtp_invalid_password");
 }

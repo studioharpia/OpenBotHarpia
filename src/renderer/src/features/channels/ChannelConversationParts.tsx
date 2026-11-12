@@ -176,7 +176,7 @@ export function ChannelSettingsPane(
   const runtime = () => channels.port();
   const [panelWidth, setPanelWidth] = createSettingsPanelWidth();
   createEffect(panelWidth, (width) => {
-    props.onWidthChange(width);
+    if (props.width === undefined) props.onWidthChange(width);
   });
   // An archived channel takes no edit, so its settings close.
   const page = useOpenChannel(props.channelId);
@@ -238,7 +238,7 @@ export function ChannelSettingsPane(
       onResizeEnd={saveSettingsPanelWidth}
       id="channel-side-panel"
       label={t("channel.panel.label")}
-      width={panelWidth()}
+      width={props.width ?? panelWidth()}
       maxWidth={props.maxWidth}
       onResize={setPanelWidth}
     >

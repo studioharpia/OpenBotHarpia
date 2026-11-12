@@ -4,6 +4,7 @@ out/
 out-*/
 dist/
 apps/*/dist/
+apps/auth-api/dist-vps/
 apps/*/.wrangler/
 apps/*/worker-configuration.d.ts
 coverage/
@@ -67,3 +68,8 @@ keys
 
 # Persistent local development identity and migration recovery.
 .openbot/
+
+# Local operational evidence and design previews can contain real account data.
+# Keep them on disk; they are not source assets for the public repository.
+/specs/evidencias/
+/specs/previews/

@@ -7,7 +7,6 @@ import { INPUT_LIMITS } from "@openbot/contracts/input-limits";
 import type {
   AgentApproval,
   AgentTask,
-  AgentTaskInput,
   AgentTasksSnapshot,
   AttachmentDataInput,
   AttachmentSummary,
@@ -118,12 +117,17 @@ interface TasksViewProps {
   approvals: readonly AgentApproval[];
   onRespondApproval: (approval: AgentApproval, decision: "accept" | "decline") => Promise<boolean>;
   /** Moves the read mark of an open task to a message. Absent where the server keeps no read marks. */
-  onRead?: ((input: AgentTaskInput, messageId: string) => void) | undefined;
+  onRead?: ((task: AgentTask, messageId: string | null) => void) | undefined;
+  failureRead?: ((task: AgentTask) => boolean) | undefined;
   /** Whether the task's running turn waits for a question or a browser takeover, which the chat answers. */
   waitsForAnswer?: ((task: AgentTask) => boolean) | undefined;
   /** Opens the task as a thread tab in its agent's chat, and leaves the page. */
   onOpenInChat?: ((task: AgentTask) => void) | undefined;
   sendShortcut?: SendShortcut | undefined;
+  /** Reuses thread actions, including the existing delete Undo flow. */
+  onRenameTask?: ((task: AgentTask, title: string) => Promise<void>) | undefined;
+  onDeleteTask?: ((task: AgentTask) => Promise<void>) | undefined;
+  hiddenTaskIds?: ReadonlySet<string> | undefined;
 }
 
 /** A start that waits for its Undo time. Its task shows in the list as queued. */
@@ -316,7 +320,8 @@ export function TasksView(props: TasksViewProps) {
 
   const tasks = createMemo<AgentTask[]>(() => {
     const listed = props.agents.flatMap((agent) => state.snapshots[agent.id]?.tasks ?? []);
-    return state.pending ? [state.pending, ...listed] : listed;
+    const visible = listed.filter((task) => !props.hiddenTaskIds?.has(task.id));
+    return state.pending ? [state.pending, ...visible] : visible;
   });
   const taskOf = (taskId: string) => tasks().find((task) => task.id === taskId);
 
@@ -827,9 +832,12 @@ export function TasksView(props: TasksViewProps) {
     };
     // The person reads the open task while the window has focus, as in its thread tab.
     createEffect(
-      () => ({ target: input(), messageId: appFocused() ? latestVisibleAgentMessageId(messages) : null }),
+      () => ({
+        target: appFocused() && state.conversations[taskId] ? hosted() : null,
+        messageId: latestVisibleAgentMessageId(messages),
+      }),
       ({ target, messageId }) => {
-        if (target && messageId) props.onRead?.(target, messageId);
+        if (target) props.onRead?.(target, messageId);
       },
     );
     const panelVoice = voice && taskVoice(voice, taskId);
@@ -844,6 +852,10 @@ export function TasksView(props: TasksViewProps) {
         {(agent) => (
           <TaskPanel
             task={hosted()}
+            failureRead={(() => {
+              const current = hosted();
+              return current ? props.failureRead?.(current) : false;
+            })()}
             title={task()?.title ?? ""}
             wait={wait()}
             onArchive={() => {
@@ -924,6 +936,7 @@ export function TasksView(props: TasksViewProps) {
       onToggleAgents={props.onToggleAgents}
       agents={props.agents}
       tasks={tasks()}
+      failureRead={props.failureRead}
       // A list that did not load keeps its agent out, so a failed load does not show the empty page.
       // With no agents yet, the agent list did not load.
       loaded={props.agents.length > 0 && props.agents.every((agent) => state.snapshots[agent.id] !== undefined)}
@@ -980,6 +993,38 @@ export function TasksView(props: TasksViewProps) {
       sendShortcut={props.sendShortcut}
       macWindowControls={appInfo()?.platform === "darwin"}
       onSelect={select}
+      onArchive={(taskId) => {
+        const task = taskOf(taskId);
+        if (task)
+          void runAction(
+            () => props.source.close({ agentId: task.agentId, taskId }, props.serverId),
+            "conversation.threads.error.archive",
+          );
+      }}
+      onRename={
+        props.onRenameTask
+          ? (taskId, title) => {
+              const task = taskOf(taskId);
+              if (task)
+                void runAction(
+                  () => props.onRenameTask?.(task, title) ?? Promise.resolve(),
+                  "conversation.threads.error.rename",
+                );
+            }
+          : undefined
+      }
+      onDelete={
+        props.onDeleteTask
+          ? (taskId) => {
+              const task = taskOf(taskId);
+              if (task)
+                void runAction(
+                  () => props.onDeleteTask?.(task) ?? Promise.resolve(),
+                  "conversation.threads.error.delete",
+                );
+            }
+          : undefined
+      }
       panel={panel}
       sideWidth={state.sideWidth}
       onSideResize={(width) =>

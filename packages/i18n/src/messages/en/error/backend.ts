@@ -1,6 +1,13 @@
 import { defineMessages } from "../../../message";
 
 export const messages = defineMessages("error.backend", {
+  "error.backend.taskTransferInvalid": "Give the task ID and the destination agent ID.",
+  "error.backend.taskTransferFailed": "OpenBot could not transfer the task. Try again.",
+  "error.backend.taskTransferOwnChatOnly":
+    "Transfer tasks from your own chat, not a channel, external conversation or another task.",
+  "error.backend.threadTransferBusy": "This task has running or pending work and cannot be moved yet.",
+  "error.backend.threadTransferRoutine": "Tasks linked to routines cannot be moved to another agent.",
+
   "error.backend.eventsUnavailable": "Events are not available on this host.",
   "error.backend.databaseIntegrity": "OpenBot database failed its integrity check.",
   "error.backend.webhookRouteLimit": "A host can have at most {limit} webhook routines.",
@@ -385,6 +392,8 @@ export const messages = defineMessages("error.backend", {
   "error.backend.threadMoveRefused": "Only a message that you sent to this agent alone can run in a new thread.",
   "error.backend.taskTitleRequired": "Give the task a short title.",
   "error.backend.taskToolInvalid": "Give the task a title of at most 120 characters and a brief that says what to do.",
+  "error.backend.taskRenameInvalid": "Give the task ID and a title of at most 120 characters.",
+  "error.backend.taskRenameFailed": "OpenBot could not rename the task. Try again.",
   "error.backend.taskOwnChatOnly":
     "Start a task only from your own chat. A channel, a messaging conversation or another task cannot start one.",
   "error.backend.taskUnfinishedLimit":

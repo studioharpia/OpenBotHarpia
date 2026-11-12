@@ -12,6 +12,7 @@ import { rendererPreviewAlias, rendererWebAlias } from "./renderer-preview-alias
 import { readLocalRuntimeVars } from "./src/server/runtime-env";
 
 export default defineConfig(({ command }) => {
+  const standalone = process.env.OPENBOT_AUTH_RUNTIME === "vps";
   const port = readApiPort(process.env.OPENBOT_API_PORT);
   const localRuntimeVars = command === "serve" ? readLocalRuntimeVars(process.env) : {};
   // The local Worker cannot reach Apple over HTTP/2, so it sends Live Activity updates to this server.
@@ -24,6 +25,9 @@ export default defineConfig(({ command }) => {
       alias: {
         "@openbot/renderer-preview": rendererPreviewAlias,
         "@openbot/renderer-web": rendererWebAlias,
+        ...(standalone
+          ? { "cloudflare:sockets": fileURLToPath(new URL("./src/vps/smtp-sockets.ts", import.meta.url)) }
+          : {}),
       },
     },
     optimizeDeps: {
@@ -35,6 +39,7 @@ export default defineConfig(({ command }) => {
     // in each copy, so the minifier moves `/*!` and `@license` comments to the end of each file.
     esbuild: { legalComments: "eof" },
     build: {
+      ...(standalone ? { outDir: "dist-vps" } : {}),
       // A caption file has to stay a file. It is small enough for Vite to fold
       // into the bundle as a `data:` URL, and a text track fetched from one is
       // cross-origin to the page that asks for it, so the player drops it and the
@@ -44,7 +49,13 @@ export default defineConfig(({ command }) => {
     environments: {
       // Worker chunks import each other in cycles. Without strict order, a chunk can run before
       // the chunk that defines its imports, and every request fails with a 500.
-      ssr: { build: { rolldownOptions: { output: { strictExecutionOrder: true } } } },
+      ssr: {
+        build: {
+          rolldownOptions: {
+            output: { strictExecutionOrder: true, ...(standalone ? { entryFileNames: "server.js" } : {}) },
+          },
+        },
+      },
     },
     server: {
       host: readApiHost(process.env.OPENBOT_API_HOST),
@@ -56,21 +67,22 @@ export default defineConfig(({ command }) => {
     plugins: [
       developmentLanGuard(),
       developmentApnsProxy(),
-      cloudflare({
-        viteEnvironment: { name: "ssr" },
-        config(config) {
-          // `vite dev` runs no relay Worker, so local email leaves from the local socket. The plugin
-          // merges arrays from the return value, so the binding must leave the config it passes.
-          if (command === "serve") {
-            config.services = config.services?.filter((service) => service.binding !== "EMAIL_RELAY");
-          }
-          return { vars: { ...config.vars, ...localRuntimeVars } };
-        },
-      }),
+      !standalone &&
+        cloudflare({
+          viteEnvironment: { name: "ssr" },
+          config(config) {
+            // `vite dev` runs no relay Worker, so local email leaves from the local socket. The plugin
+            // merges arrays from the return value, so the binding must leave the config it passes.
+            if (command === "serve") {
+              config.services = config.services?.filter((service) => service.binding !== "EMAIL_RELAY");
+            }
+            return { vars: { ...config.vars, ...localRuntimeVars } };
+          },
+        }),
       // The Worker keeps every language in its bundle.
       lazyLanguageCatalogs({ applyToEnvironment: (environment) => environment.name === "client" }),
       bloubServerBuild(),
-      tanstackStart(),
+      tanstackStart(standalone ? { server: { entry: "worker-entry.ts" } } : undefined),
       solidPlugin({ ssr: true }),
       // Lightning CSS currently reports valid named highlight selectors as
       // unsupported. Let Vite handle the final CSS bundle until that upstream

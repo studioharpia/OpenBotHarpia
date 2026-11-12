@@ -19,6 +19,9 @@ import type { AttachmentDownloads, AttachmentMediaSource } from "./AttachmentCar
 import type { MessageImageFile } from "./MarkdownMessageText";
 import { conversationBubbleVariant, MessageBody } from "./MessageRendering";
 
+export { type ImageMessageRow, imageMessageRows } from "./image-message-rows";
+export { chronologicalMessageRows, messageRowCreatedAt } from "./message-row-order";
+
 /**
  * Who wrote a message, as much as a row needs to draw it.
  *
@@ -53,6 +56,8 @@ export interface ChatMessageRowProps {
   showAuthor?: boolean | undefined;
   /** Whether the time stands beside the author name. Without a name, the time is in the action row. */
   showTime?: boolean | undefined;
+  /** Places the sent time beside each bubble, revealed together with its hover actions. */
+  timeBeside?: boolean | undefined;
   /** Draws a long message in full, with no fold: in-chat search and a quote jump read the drawn text. */
   showFull?: boolean | undefined;
   /** Opens a folded long message, as its "Show full message" button does. The reader can fold it again. */
@@ -97,6 +102,7 @@ export interface ChatMessageRowProps {
   onPreview: (attachment: AttachmentSummary) => void;
   onAttachmentAction: (attachment: AttachmentSummary, action: "open" | "reveal" | "download") => void;
   onOpenSharedFile?: (path: string, asWritten?: string) => void;
+  onRevealLocalFile?: ((path: string, kind: "shared" | "workspace") => void) | undefined;
   onOpenWorkspaceFile?: ((path: string, asWritten?: string) => void) | undefined;
   onOpenQuote?: ((messageId: string, text: string) => void) | undefined;
   onOpenTag?: ((kind: "tab" | "thread", id: string) => void) | undefined;
@@ -123,7 +129,11 @@ export interface ChatMessageRowProps {
  * conversation arrives as a prop.
  */
 export function ChatMessageRow(props: ChatMessageRowProps): JSX.Element {
-  const { t } = useText();
+  const { t, format } = useText();
+  const sentTime = () =>
+    props.message.createdAt
+      ? format.date(new Date(props.message.createdAt), { hour: "2-digit", minute: "2-digit" })
+      : props.message.time;
   const own = () => props.author.kind === "you";
   const member = () => props.author.kind === "member";
   const person = () => own() || member();
@@ -157,6 +167,7 @@ export function ChatMessageRow(props: ChatMessageRowProps): JSX.Element {
       "message-entry-agent": !person(),
       "message-entry-with-author": props.showAuthor === true && !person(),
       "message-entry-actions-beside": beside(),
+      "message-entry-time-beside": props.timeBeside === true,
     },
     props.class,
   ];
@@ -223,6 +234,7 @@ export function ChatMessageRow(props: ChatMessageRowProps): JSX.Element {
       onAttachmentAction={props.onAttachmentAction}
       onOpenSharedFile={props.onOpenSharedFile}
       onOpenWorkspaceFile={props.onOpenWorkspaceFile}
+      onRevealLocalFile={props.onRevealLocalFile}
       onOpenQuote={props.onOpenQuote}
       onOpenTag={props.onOpenTag}
       onDownload={props.onDownload}
@@ -291,14 +303,13 @@ export function ChatMessageRow(props: ChatMessageRowProps): JSX.Element {
       </Show>
     </Bubble>
   );
-  // The actions, the time and the steps stand under the bubble. A named author shows the time beside
-  // the name. A row beside the bubble goes under it only when the line has no room. The reader's own
-  // row can stand beside the bubble too, before it; another person's row stays under it.
-  const beside = () => props.actionsBeside === true && !member();
+  // Legacy rows keep their footer and author time. Agent chats opt into the side time,
+  // independent of whether this message has actions (including intermediate commentary).
+  const beside = () => props.timeBeside === true || (props.actionsBeside === true && !member());
   const actionRow = (): JSX.Element => (
     <div class="message-action-row">
       {props.actions}
-      <Show when={props.actionTime !== false && (!props.showAuthor || own())}>
+      <Show when={!props.timeBeside && props.actionTime !== false && (!props.showAuthor || own())}>
         <time class="message-time" datetime={props.message.createdAt}>
           {props.message.time}
         </time>
@@ -344,7 +355,7 @@ export function ChatMessageRow(props: ChatMessageRowProps): JSX.Element {
                 </Button>
               )}
             </Show>
-            <Show when={props.showTime}>
+            <Show when={props.showTime && !props.timeBeside}>
               <time class="message-time" datetime={props.message.createdAt}>
                 {props.message.time}
               </time>
@@ -362,7 +373,17 @@ export function ChatMessageRow(props: ChatMessageRowProps): JSX.Element {
               ))}
             </div>
           </Show>
-          <Show when={props.actionRow !== false && beside()}>{actionRow()}</Show>
+          <Show
+            when={props.timeBeside}
+            fallback={<Show when={props.actionRow !== false && beside()}>{actionRow()}</Show>}
+          >
+            <div class="message-side">
+              <time class="message-time" datetime={props.message.createdAt}>
+                {sentTime()}
+              </time>
+              <Show when={props.actionRow !== false}>{actionRow()}</Show>
+            </div>
+          </Show>
         </div>
         <Show when={props.actionRow !== false && !beside()}>{actionRow()}</Show>
       </MessageContent>

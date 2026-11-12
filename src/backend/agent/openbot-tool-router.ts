@@ -620,10 +620,19 @@ export class OpenBotToolRouter {
                   // A Link card is read from Link before the fill; a saved card comes from the Vault.
                   const linkVault = yield* this.#attention.linkCardVault(client, toolRequest, params);
                   if (linkVault && !("secret" in linkVault)) return linkVault;
-                  return yield* this.#browser.handleDynamicTool(params, {
+                  const result = yield* this.#browser.handleDynamicTool(params, {
                     onUserControl: userControl,
                     cardVault: linkVault ?? this.#attention.cardVault(client, toolRequest, params),
                   });
+                  if (
+                    params.tool === "screenshot" &&
+                    isRecord(params.arguments) &&
+                    params.arguments.attach === true &&
+                    result.success
+                  ) {
+                    return yield* this.#attachBrowserScreenshot(agentId, params, result);
+                  }
+                  return result;
                 }
               }
             });
@@ -2006,6 +2015,47 @@ export class OpenBotToolRouter {
       ? sourceText("status.agent.screenCaptureDisplay", { name: display.name })
       : sourceText("status.agent.screenCaptureScreen");
   });
+
+  /** A requested browser image uses the same durable attachment path as other generated files. */
+  readonly #attachBrowserScreenshot = Effect.fn("OpenBotToolRouter.attachBrowserScreenshot")(function* (
+    this: OpenBotToolRouter,
+    agentId: string,
+    params: DynamicToolCallParams,
+    result: DynamicToolResult,
+  ) {
+    const messageId = responseAttachmentMessageId(params.threadId, params.turnId, params.callId);
+    const snapshot = this.#conversation.ensureSnapshot(agentId, params.threadId);
+    if (snapshot.messages.some((message) => message.id === messageId)) {
+      return openBotToolResult({ status: "shown", messageId });
+    }
+    const image = result.contentItems.find((item) => item.type === "inputImage");
+    const prefix = "data:image/png;base64,";
+    if (image?.type !== "inputImage" || !image.imageUrl.startsWith(prefix)) {
+      throw new Error("Browser screenshot did not return a PNG image to attach.");
+    }
+    yield* this.#addGeneratedMessage({
+      agentId,
+      threadId: params.threadId,
+      turnId: params.turnId,
+      messageId,
+      file: {
+        bytes: Buffer.from(image.imageUrl.slice(prefix.length), "base64"),
+        name: `Browser capture ${new Date().toISOString().replace(/[:.]/gu, "-")}.png`,
+        mimeType: "image/png",
+      },
+      text: "",
+      itemType: "agent_attachment",
+      eventType: "response.attachments-added",
+      detail: () => ({ turnId: params.turnId, messageId, attachmentCount: 1 }),
+    });
+    return {
+      ...result,
+      contentItems: [
+        { type: "inputText", text: JSON.stringify({ status: "shown", messageId }) },
+        ...result.contentItems,
+      ],
+    };
+  }, Effect.uninterruptible);
 
   /**
    * Stores the capture as an attachment of a message in the conversation and gives the agent the

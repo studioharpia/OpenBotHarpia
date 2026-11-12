@@ -37,6 +37,7 @@ export function sidebarAgentStateLabel(state: SidebarAgentState, t: AppTranslate
   }
   if (state.kind === "working") return t("sidebar.state.working");
   if (state.kind === "responded") return t("sidebar.state.responded");
+  if (state.kind === "routine" && state.task) return t("conversation.tasks.state.failed");
   if (state.kind === "routine") return routineStateLabel(state.phase, state.count, t);
   return t("sidebar.state.unread", { count: state.count });
 }

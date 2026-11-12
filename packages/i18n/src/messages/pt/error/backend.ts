@@ -2,6 +2,13 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "Informe o ID da tarefa e o ID do agente de destino.",
+  "error.backend.taskTransferFailed": "O OpenBot não conseguiu transferir a tarefa. Tente novamente.",
+  "error.backend.taskTransferOwnChatOnly":
+    "Transfira tarefas pelo seu chat principal, não por um canal, conversa externa ou outra tarefa.",
+  "error.backend.threadTransferBusy": "Esta tarefa tem trabalho em execução ou pendente e ainda não pode ser movida.",
+  "error.backend.threadTransferRoutine": "Tarefas vinculadas a rotinas não podem ser movidas para outro agente.",
+
   "error.backend.eventsUnavailable": "Os eventos não estão disponíveis neste computador anfitrião.",
   "error.backend.databaseIntegrity": "O banco de dados do OpenBot falhou na verificação de integridade.",
   "error.backend.webhookRouteLimit": "Um computador anfitrião pode ter no máximo {limit} rotinas de webhook.",
@@ -394,6 +401,8 @@ export const messages = {
   "error.backend.taskTitleRequired": "Dê um título curto à tarefa.",
   "error.backend.taskToolInvalid":
     "Dê à tarefa um título de no máximo 120 caracteres e uma instrução que diga o que fazer.",
+  "error.backend.taskRenameInvalid": "Informe o ID da tarefa e um título de até 120 caracteres.",
+  "error.backend.taskRenameFailed": "O OpenBot não conseguiu renomear a tarefa. Tente novamente.",
   "error.backend.taskOwnChatOnly":
     "Inicie uma tarefa só a partir do seu próprio chat. Um canal, uma conversa de mensagens ou outra tarefa não pode iniciar uma.",
   "error.backend.taskUnfinishedLimit":

@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "إجراءات القالب",
+  "composer.templates.hint": "اكتب / في المحادثة لإدراج نص محفوظ.",
+  "composer.templates.new": "قالب جديد",
+  "composer.templates.empty": "لا توجد قوالب.",
+  "composer.templates.editor": "قالب نص",
+  "composer.templates.name": "الاسم",
+  "composer.templates.prompt": "النص",
+  "composer.templates.storageError": "تعذرت قراءة القوالب أو حفظها.",
+  "composer.templates.delete": "حذف القالب؟",
+  "composer.templates.noMatch": "لا توجد قوالب مطابقة.",
+  "composer.templates.list": "قوالب النصوص",
   "composer.queueEdit.body": "أنت تعدّل رسالة في قائمة الانتظار. احفظ التعديل أو ألغه لتشغيلها.",
   "composer.queueEdit.cancel": "إلغاء التعديل",
   "composer.providerWait.offlineTitle": "لا يوجد اتصال بالإنترنت",
@@ -74,6 +85,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "مراسلة الوكيل",
   "composer.placeholder.answer": "اكتب إجابتك",
   "composer.add.label": "إضافة إلى الطلب",
+  "composer.add.queue": "إضافة الرسالة إلى الانتظار",
   "composer.add.files": "إرفاق ملفات",
   "composer.add.skill": "استخدام مهارة",
   "composer.upload.cancel": "إلغاء الرفع",

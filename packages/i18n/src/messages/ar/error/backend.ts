@@ -2,6 +2,13 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "أدخل معرّف المهمة ومعرّف الوكيل المستلم.",
+  "error.backend.taskTransferFailed": "تعذّر على OpenBot نقل المهمة. حاول مجددًا.",
+  "error.backend.taskTransferOwnChatOnly":
+    "انقل المهام من محادثتك الرئيسية، وليس من قناة أو محادثة خارجية أو مهمة أخرى.",
+  "error.backend.threadTransferBusy": "تتضمن هذه المهمة عملاً قيد التنفيذ أو معلقًا ولا يمكن نقلها بعد.",
+  "error.backend.threadTransferRoutine": "لا يمكن نقل المهام المرتبطة بروتينات إلى وكيل آخر.",
+
   "error.backend.eventsUnavailable": "الأحداث غير متاحة على هذا المضيف.",
   "error.backend.databaseIntegrity": "فشلت قاعدة بيانات OpenBot في فحص السلامة.",
   "error.backend.webhookRouteLimit": "يمكن أن يحتوي المضيف على {limit} مهام دورية webhook كحد أقصى.",
@@ -366,6 +373,8 @@ export const messages = {
   "error.backend.threadMoveRefused": "يمكن تشغيل الرسالة التي أرسلتها إلى هذا الوكيل وحده فقط في سلسلة جديدة.",
   "error.backend.taskTitleRequired": "امنح المهمة عنوانًا قصيرًا.",
   "error.backend.taskToolInvalid": "امنح المهمة عنوانًا من 120 حرفًا كحد أقصى ووصفًا موجزًا يوضح ما يجب فعله.",
+  "error.backend.taskRenameInvalid": "أدخل معرّف المهمة وعنوانًا لا يتجاوز 120 حرفًا.",
+  "error.backend.taskRenameFailed": "تعذّر على OpenBot إعادة تسمية المهمة. حاول مجددًا.",
   "error.backend.taskOwnChatOnly": "ابدأ مهمة من دردشتك فقط. لا يمكن لقناة أو محادثة مراسلة أو مهمة أخرى بدء مهمة.",
   "error.backend.taskUnfinishedLimit":
     "لدى هذا الوكيل بالفعل {count} مهام غير مكتملة. ابدأ مهمة أخرى عند انتهاء إحداها.",

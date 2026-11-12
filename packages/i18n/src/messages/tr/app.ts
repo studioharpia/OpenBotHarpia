@@ -55,6 +55,7 @@ export const messages = {
   "app.rail.tasks": "Görevler",
   "app.rail.workflows": "İş akışları",
   "app.rail.usage": "Kullanım",
+  "app.rail.templates": "Şablonlar",
   "app.rail.library": "Kitaplık",
   "app.rail.marketplace": "Pazar yeri",
   "app.rail.settings": "Ayarlar",

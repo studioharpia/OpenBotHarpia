@@ -1,6 +1,28 @@
 import { defineMessages } from "../../message";
 
 export const messages = defineMessages("conversation", {
+  "conversation.threads.error.transfer": "Could not move the task.",
+
+  "conversation.sidePanel.pane.central": "Agent central",
+  "conversation.central.mainChat": "Main conversation",
+  "conversation.central.overview": "Overview",
+  "conversation.central.currentMonth": "This month",
+  "conversation.central.previousMonth": "Last month",
+  "conversation.central.tokens": "Tokens used",
+  "conversation.central.finishedTasks": "Tasks finished",
+  "conversation.central.finishedHint":
+    "Tasks counted once, by their first successful completion date. Archived tasks are included.",
+  "conversation.central.completedTasks": "Completed",
+  "conversation.central.inProgressTasks": "In progress",
+  "conversation.central.emptySection": "No tasks in this section.",
+  "conversation.central.statusRunning": "Running",
+  "conversation.central.statusStarting": "Connecting",
+  "conversation.central.statusReady": "Available",
+  "conversation.central.statusUnavailable": "Unavailable",
+  "conversation.central.activity": "Token activity",
+  "conversation.central.archivedTasks": "Archived",
+  "conversation.central.newTask": "New task",
+  "conversation.central.taskActions": "Actions for {title}",
   "conversation.globalSearch.title": "Search OpenBot",
   "conversation.globalSearch.filter": "Filter results",
   "conversation.globalSearch.tab.all": "All",
@@ -62,6 +84,8 @@ export const messages = defineMessages("conversation", {
   "conversation.sidePanel.pane.browser": "Browser",
   "conversation.sidePanel.pane.files": "Files",
   "conversation.threads.new": "New thread",
+  "conversation.threads.showSidebar": "Show tasks in sidebar",
+  "conversation.threads.showTopbar": "Show tasks in top bar",
   "conversation.threads.all": "All threads",
   "conversation.threads.open": "Open threads",
   "conversation.threads.current": "Thread: {title}",

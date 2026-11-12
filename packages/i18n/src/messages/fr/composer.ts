@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "Actions du modèle",
+  "composer.templates.hint": "Tapez / dans un chat pour insérer un prompt enregistré.",
+  "composer.templates.new": "Nouveau modèle",
+  "composer.templates.empty": "Aucun modèle.",
+  "composer.templates.editor": "Modèle de prompt",
+  "composer.templates.name": "Nom",
+  "composer.templates.prompt": "Prompt",
+  "composer.templates.storageError": "Impossible de lire ou enregistrer les modèles.",
+  "composer.templates.delete": "Supprimer le modèle ?",
+  "composer.templates.noMatch": "Aucun modèle trouvé.",
+  "composer.templates.list": "Modèles de prompts",
   "composer.queueEdit.body":
     "Vous modifiez un message en attente. Enregistrez ou annulez la modification pour permettre son exécution.",
   "composer.queueEdit.cancel": "Annuler",
@@ -78,6 +89,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "Écrire à l’agent",
   "composer.placeholder.answer": "Saisissez votre réponse",
   "composer.add.label": "Ajouter à la demande",
+  "composer.add.queue": "Mettre en attente",
   "composer.add.files": "Joindre des fichiers",
   "composer.add.skill": "Utiliser une compétence",
   "composer.upload.cancel": "Annuler l’envoi",

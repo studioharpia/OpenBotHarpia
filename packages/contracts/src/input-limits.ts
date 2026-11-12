@@ -142,9 +142,12 @@ export const INPUT_LIMITS = {
 } as const;
 
 // Active members of one host with no plan and no entitled license of its owner, owner included: the
-// owner and two others. A plan sets its own limit (`memberLimitForPlan`), and a license gives its users.
+// owner and nine others. A plan sets its own limit (`memberLimitForPlan`), and a license gives its users.
 // `INPUT_LIMITS.teamMembers` stays the wire cap for stored members.
-export const DEFAULT_TEAM_MEMBER_LIMIT = 3;
+export const DEFAULT_TEAM_MEMBER_LIMIT = 10;
+
+// Account services from before per-host limits omit `memberLimit` and enforce three active members.
+export const LEGACY_TEAM_MEMBER_LIMIT = 3;
 
 export const ATTACHMENT_LIMITS = {
   fileBytes: 100 * 1024 * 1024,

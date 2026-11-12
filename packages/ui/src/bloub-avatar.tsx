@@ -1,8 +1,8 @@
-import { BloubBot } from "@norbert_bodziony/bloub";
-import { bloubAvatarProfile } from "@openbot/brand/bloub-avatar";
 import type { AvatarColor, AvatarHue } from "@openbot/contracts/ipc";
 import { render } from "@solidjs/web";
 import { flush } from "solid-js";
+import { avatarProfile as bloubAvatarProfile } from "./avatar-catalog";
+import { AvatarFlat } from "./features/agents/AvatarArt";
 
 /**
  * When an avatar animates, which is a performance decision and not a state one: `hover` and `idle`
@@ -12,7 +12,6 @@ import { flush } from "solid-js";
 export type AvatarMotion = "hover" | "always" | "idle";
 export {
   AVATAR_COLOR_CHOICES,
-  AVATAR_EXPRESSIONS,
   AVATAR_HUE_CHOICES,
   AVATAR_STYLES,
   type AvatarColorChoice,
@@ -21,13 +20,8 @@ export {
   avatarHeadColor,
   avatarHueForColor,
   avatarHueSwatch,
-  avatarSeedForFace,
-  avatarStyleForSeed,
   type BloubAvatarProfile,
-  bloubAvatarProfile,
   isAvatarColorChoice,
-  SUPPORTED_AVATAR_SILHOUETTES,
-  type SupportedAvatarSilhouetteId,
 } from "@openbot/brand/bloub-avatar";
 export {
   type AvatarMood,
@@ -36,6 +30,15 @@ export {
   SHAPE_SAFE_STATES,
   type ShapeSafeStateId,
 } from "@openbot/brand/bloub-avatar-motion";
+export {
+  AVATAR_EYES as AVATAR_EXPRESSIONS,
+  AVATAR_SHAPES as SUPPORTED_AVATAR_SILHOUETTES,
+  type AvatarExpressionId,
+  type AvatarShapeId as SupportedAvatarSilhouetteId,
+  avatarArtSeed as avatarSeedForFace,
+  avatarArtStyle as avatarStyleForSeed,
+  avatarProfile as bloubAvatarProfile,
+} from "./avatar-catalog";
 
 export function createStaticAvatarSvg(
   seed: string,
@@ -67,7 +70,7 @@ function mountStaticAvatar(
   const profile = bloubAvatarProfile(seed, hue, color);
   const dispose = render(
     () => (
-      <BloubBot
+      <AvatarFlat
         size={100}
         shape={profile.shape}
         color={profile.color}

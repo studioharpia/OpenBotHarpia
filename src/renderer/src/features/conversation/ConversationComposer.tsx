@@ -15,6 +15,7 @@ import {
   TEAM_SVG_ATTACHMENTS_CAPABILITY,
   TEAM_ZIP_ATTACHMENTS_CAPABILITY,
 } from "@openbot/contracts/team-protocol/current";
+import { MESSAGE_DELIVERY_CAPABILITY } from "@openbot/contracts/team-protocol/message-delivery-v1";
 import { sourceText } from "@openbot/i18n/source";
 import { spentUsageWindow } from "@openbot/team-client/plan-limits";
 import { Button, Input } from "@openbot/ui";
@@ -49,7 +50,7 @@ import { stopSpokenReply } from "../speech/speech-replies";
 import { copyComposerSelection, readComposerCopy } from "./composer-clipboard";
 import { createComposerResize } from "./composer-resize";
 import { useConversationViewScope } from "./conversation-scope";
-import { currentConversationTarget } from "./stores/composer-store";
+import { conversationOwnerId, currentConversationTarget } from "./stores/composer-store";
 
 // Module scope: the composer remounts on navigation, and a dismissed notice must stay dismissed.
 const [dismissedCompactions, setDismissedCompactions] = createSignal<Record<string, string>>({});
@@ -112,6 +113,7 @@ export function ConversationComposer() {
     cancelVoiceRecording,
     submitComposer,
     steerComposer,
+    queueComposer,
     composerAnswersPrompt,
     submitting,
     rowDraftAttachments,
@@ -730,6 +732,14 @@ export function ConversationComposer() {
               }
               ariaLabel={channel ? t("channel.composer.label") : messageLabel()}
               focusRequest={composerFocusRequest()}
+              focusOnOpen={
+                !sideThreadOpen() &&
+                !props.workspaceCovered &&
+                activeRightPanel() !== "settings" &&
+                conversationOwnerId(props)
+                  ? `${props.server?.id ?? "local"}:${conversationOwnerId(props)}`
+                  : undefined
+              }
               skillPickerRequest={skillPickerRequest()}
               quoteRequest={quoteRequest()}
               onOpenQuote={openQuote}
@@ -786,6 +796,18 @@ export function ConversationComposer() {
               onPickSkill={pickSkill()}
               onSideQuestion={askSideQuestion()}
               onVoice={openVoiceConversation()}
+              onQueue={
+                props.activeTurnId &&
+                !channel &&
+                composerHasContent() &&
+                !editingDeliveryId() &&
+                voicePhase() === "idle" &&
+                (!props.server ||
+                  props.server.id === "local" ||
+                  props.server.compatibility?.capabilities.includes(MESSAGE_DELIVERY_CAPABILITY))
+                  ? queueComposer
+                  : undefined
+              }
             />
             <div class="composer-primary-actions">
               <Show

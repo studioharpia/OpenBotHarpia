@@ -226,10 +226,14 @@ function isMissing(error: AttachmentOperationError): boolean {
 export const resolveWorkspaceFile = Effect.fn("Workspace.resolveWorkspaceFile")(function* (
   agent: Pick<AgentSummary, "id" | "workspacePath">,
   inputPath: string,
-  options: { allowOutside?: boolean; fileHistory?: readonly string[] } = {},
+  options: { allowOutside?: boolean; allowDirectory?: boolean; fileHistory?: readonly string[] } = {},
 ): Effect.fn.Return<ResolvedWorkspaceFile, AttachmentOperationError> {
-  const { resolvedPath, insideWorkspace, metadata } = yield* resolveWorkspacePath(agent, inputPath, options);
-  if (!metadata.isFile()) return yield* refuse("not-file", sourceText("error.backend.workspacePathNotFile"));
+  const { resolvedPath, insideWorkspace, metadata } = yield* resolveWorkspacePath(agent, inputPath, {
+    ...options,
+    allowRoot: options.allowDirectory === true,
+  });
+  if (!metadata.isFile() && !(options.allowDirectory && metadata.isDirectory()))
+    return yield* refuse("not-file", sourceText("error.backend.workspacePathNotFile"));
   return { path: resolvedPath, name: basename(resolvedPath), size: metadata.size, insideWorkspace };
 });
 

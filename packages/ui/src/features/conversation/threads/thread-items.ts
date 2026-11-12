@@ -3,14 +3,19 @@ import type { SidebarWaitReason } from "@openbot/ui/features/sidebar/sidebar-typ
 import { DRAFT_THREAD_ID, MAIN_THREAD_ID, type ThreadItem, type ThreadStatus } from "./thread-types";
 
 /** What a side thread does now. A turn that waits for an approval or an answer waits for the user. */
-export function agentTaskThreadStatus(task: AgentTask, waitsFor: SidebarWaitReason | undefined): ThreadStatus {
+export function agentTaskThreadStatus(
+  task: AgentTask,
+  waitsFor: SidebarWaitReason | undefined,
+  failureRead = false,
+): ThreadStatus {
   if (task.state === "running") return waitsFor ? { kind: "waiting", reason: waitsFor } : { kind: "working" };
   if (task.state === "queued") return { kind: "queued" };
-  if (task.outcome === "failed") return { kind: "failed" };
+  if (task.outcome === "failed" && !failureRead) return { kind: "failed" };
   return { kind: "idle" };
 }
 
 export interface ThreadListsInput {
+  failureRead?: ((task: AgentTask) => boolean) | undefined;
   /** When the agent's own chat changed last. The new thread tab shows this time. */
   mainUpdatedAt: string;
   /** The side threads of the agent: open ones and archived (`closed`) ones. */
@@ -50,7 +55,8 @@ export function threadLists(input: ThreadListsInput): ThreadLists {
       kind: "side",
       title: task.title,
       updatedAt: task.updatedAt,
-      status: agentTaskThreadStatus(task, input.waitsFor(task)),
+      outcome: task.outcome,
+      status: agentTaskThreadStatus(task, input.waitsFor(task), input.failureRead?.(task)),
     };
     if (input.unread) item.unread = input.unread(task);
     if (task.state === "closed") archived.push(item);

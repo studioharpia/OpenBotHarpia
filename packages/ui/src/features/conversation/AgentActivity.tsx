@@ -130,7 +130,7 @@ export function AgentActivityIndicator(props: {
   };
   // A named function, not a ternary in the prop: the compiler wraps a ternary prop in a memo, and
   // the avatar reads its mood in a tracked effect, where a new memo halts the reactive system.
-  const mood = () => (props.waitingFor ? "connecting" : "working");
+  const mood = () => (props.waitingFor ? "idle" : "working");
   const waiting = () => (props.waitingFor ? "true" : undefined);
   const plain = () => (props.plain ? "true" : undefined);
   const avatarActivity = () => (props.plain && !props.waitingFor ? (props.activity ?? null) : undefined);
@@ -162,7 +162,13 @@ export function AgentActivityIndicator(props: {
         stepsOpenByDefault={props.stepsOpenByDefault}
         live={props.phase !== "exiting"}
       >
-        <AgentAvatar agent={props.agent} mood={mood()} activity={avatarActivity()} class="agent-activity-avatar" />
+        <AgentAvatar
+          agent={props.agent}
+          mood={mood()}
+          activity={avatarActivity()}
+          workingFaces
+          class="agent-activity-avatar"
+        />
         <Show
           when={plain()}
           fallback={<Show when={shownLabel()}>{(text) => <span class="agent-activity-label">{text()}</span>}</Show>}

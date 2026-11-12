@@ -11,6 +11,8 @@ import type {
 import type { JSX } from "@solidjs/web";
 import type { AvatarMood } from "../../bloub-avatar";
 import type { AgentProfile } from "../../data";
+import type { TaskTransferActions } from "../conversation/threads/task-transfer-drag";
+import type { ThreadItem } from "../conversation/threads/thread-types";
 import type { ServerMenuProps } from "../servers/ServerMenu";
 import type { SidebarPinnedItem } from "./sidebar-pins";
 
@@ -67,6 +69,19 @@ export interface SidebarProps {
   serverUpdate?: { version: string; running: boolean; onOpen: () => void } | undefined;
   agents: AgentProfile[];
   activeAgentId: string;
+  taskTransfer?: TaskTransferActions | undefined;
+  /** Side threads below each agent when this device chooses the sidebar placement. */
+  agentThreads?:
+    | {
+        items: (agentId: string) => readonly ThreadItem[];
+        activeId: (agentId: string) => string | null;
+        onOpen: (agentId: string, threadId: string) => void;
+        onCloseDraft?: ((agentId: string, threadId: string) => void) | undefined;
+        onArchive: (agentId: string, threadId: string) => void;
+        onRename?: ((agentId: string, threadId: string, title: string) => void) | undefined;
+        onDelete?: ((agentId: string, threadId: string) => void) | undefined;
+      }
+    | undefined;
   showPeople?: boolean | undefined;
   people: TeamPresenceMember[];
   directThreads: DirectThreadSummary[];
@@ -126,6 +141,13 @@ export interface SidebarProps {
   /** The agents whose chat is open in a window of its own. Their rows show a window mark. */
   windowAgentIds?: ReadonlySet<string> | undefined;
   compact: boolean;
+  /** A single-line agent list, independent of the collapsed icon-only sidebar. */
+  unreadOnly?: boolean | undefined;
+  onUnreadOnlyChange?: ((enabled: boolean) => void) | undefined;
+  /** Raw unread state, independent of the higher-priority activity badge and task placement. */
+  agentHasUnread?: ((agentId: string) => boolean) | undefined;
+  compactAgentRows?: boolean | undefined;
+  onCompactAgentRowsChange?: ((compact: boolean) => void) | undefined;
   /** A card under the chat list, such as an announcement. The compact sidebar has no room for it. */
   footer?: JSX.Element;
   onExpand: () => void;
@@ -165,7 +187,7 @@ export type SidebarAgentState =
   | { kind: "working" }
   | { kind: "responded" }
   | { kind: "unread"; count: number }
-  | { kind: "routine"; phase: SidebarRoutinePhase; count: number }
+  | { kind: "routine"; phase: SidebarRoutinePhase; count: number; task?: boolean }
   /** The provider plan is spent, so the queue waits. `resetsAt` is in epoch seconds, `null` when unknown. */
   | { kind: "limited"; resetsAt: number | null };
 

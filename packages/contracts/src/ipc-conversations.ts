@@ -170,6 +170,10 @@ export interface MarkConversationUnreadInput {
 export interface SendMessageInput {
   agentId: string;
   text: string;
+  /** Per-message intent. Absent, preserves the host/agent busy-message preference. */
+  deliveryMode?: "queue" | "steer";
+  /** Never steer a different turn if the one shown when sending already ended. */
+  expectedTurnId?: string;
   attachmentDraftIds?: string[];
   replyToMessageId?: string | null;
   /**

@@ -4,6 +4,7 @@ import { AgentUsagePanel, LibraryPanel, WorkflowsPage } from "../../lazy-views";
 import { SkillsMarketplace } from "../../WorkspaceOverlays";
 import { SchedulePanel } from "../schedule/SchedulePanel";
 import { useServers } from "../servers/servers-context";
+import { TemplatesPage } from "../templates/TemplatesPage";
 import { UsageMachine } from "../usage/UsageMachine";
 import { useUsage } from "../usage/usage-context";
 import { SettingsPage } from "./SettingsPage";
@@ -55,6 +56,9 @@ export function WindowPageView() {
             <Loading>
               <WorkflowsPage serverId={serverId()} />
             </Loading>
+          </Match>
+          <Match when={usage.state.view === "templates"}>
+            <TemplatesPage />
           </Match>
           <Match when={usage.state.view === "library"}>
             <Loading>

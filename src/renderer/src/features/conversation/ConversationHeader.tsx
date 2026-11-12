@@ -13,6 +13,8 @@ import { ConversationHeader as SharedConversationHeader } from "@openbot/ui/feat
 import { ThreadHeader } from "@openbot/ui/features/conversation/threads/ThreadHeader";
 import { MAIN_THREAD_ID } from "@openbot/ui/features/conversation/threads/thread-types";
 import { Show } from "solid-js";
+import { useLayout } from "../../layout";
+import { usePlatform } from "../../platform";
 import { useConversationViewScope } from "./conversation-scope";
 
 const loadAgentSettingsPanel = () => import("./AgentSettingsPanel");
@@ -30,6 +32,8 @@ import { useText } from "@openbot/ui/text";
 /** @internal Stable HMR boundary for conversation header. */
 export function ConversationHeader() {
   const { t } = useText();
+  const layout = useLayout();
+  const platform = usePlatform();
   const {
     actingBrowserControl,
     agentActivity,
@@ -148,7 +152,21 @@ export function ConversationHeader() {
       }
       threads={
         <Show when={props.threads}>
-          {(threads) => <ThreadHeader {...threads().header} onMoveToSide={moveThreadToPanel} />}
+          {(threads) => (
+            <ThreadHeader
+              {...threads().header}
+              onMoveToSide={moveThreadToPanel}
+              placement={platform.chatWindow || layout.leftPanelCompact() ? "topbar" : layout.threadPlacement()}
+              onPlacementChange={
+                platform.chatWindow
+                  ? undefined
+                  : (placement) => {
+                      if (placement === "sidebar") layout.expandSidebar();
+                      layout.setThreadPlacement(placement);
+                    }
+              }
+            />
+          )}
         </Show>
       }
       sidePanel={

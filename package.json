@@ -11,12 +11,12 @@
   "license": "PolyForm-Noncommercial-1.0.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nightly-labs/openbot.git"
+    "url": "git+https://github.com/studioharpia/OpenBotHarpia.git"
   },
   "bugs": {
-    "url": "https://github.com/nightly-labs/openbot/issues"
+    "url": "https://github.com/studioharpia/OpenBotHarpia/issues"
   },
-  "homepage": "https://github.com/nightly-labs/openbot#readme",
+  "homepage": "https://github.com/studioharpia/OpenBotHarpia#readme",
   "keywords": [
     "ai-agents",
     "bun",
@@ -385,6 +385,7 @@
     "test:messaging-telegram-mentions": "bun scripts/messaging-telegram-mentions-e2e.ts",
     "test:messaging-slack-ping-reply": "bun scripts/messaging-slack-ping-reply-e2e.ts",
     "test:turn-input": "bun scripts/turn-input-e2e.ts",
+    "test:agent-task-limit": "bun scripts/agent-task-limit-e2e.ts",
     "test:analytics-redaction": "bun scripts/analytics-redaction-e2e.ts",
     "test:remote-connect-analytics": "bun scripts/remote-connect-analytics-e2e.ts",
     "test:central-auth-startup": "bun scripts/central-auth-startup-stall-e2e.ts",
@@ -437,7 +438,7 @@
     "check:doc-links": "bun scripts/check-doc-links.ts",
     "check:agent-context": "bun scripts/agent-context-budget.ts",
     "verify:preload": "bun scripts/verify-preload-bundle.ts",
-    "package": "bun run voice:prepare-runtime && bun run prepare:remote-desktop-runtime && bun run verify:remote-desktop-runtime && bun run prepare:cua-driver && bun run build && electron-builder --dir --mac --config.mac.identity=null --config.mac.notarize=false",
+    "package": "bun run voice:prepare-runtime && bun run prepare:remote-desktop-runtime && bun run verify:remote-desktop-runtime && bun run prepare:cua-driver && bun run build && bun scripts/package-macos-local.ts",
     "verify:package": "bun scripts/verify-macos-package.ts",
     "package:verify": "bun run package && bun run verify:package",
     "package:win": "bun run voice:prepare-runtime && bun scripts/prepare-remote-desktop-runtime.ts win32 x64 && bun run verify:remote-desktop-runtime --windows && bun scripts/install-cua-driver.ts win32 x64 && bun run build && electron-builder --dir --win --x64 --publish never",
@@ -448,7 +449,7 @@
     "package:linux:verify": "bun run package:linux && bun run verify:package:linux",
     "verify:update-artifacts": "bun scripts/verify-update-artifacts.ts",
     "package:win:verify": "bun run package:win && bun run verify:package:win",
-    "dist:mac": "bun run voice:prepare-runtime && bun run prepare:remote-desktop-runtime && bun run verify:remote-desktop-runtime && bun run prepare:cua-driver && bun run build && electron-builder --mac --config.mac.identity=null --config.mac.notarize=false",
+    "dist:mac": "bun run voice:prepare-runtime && bun run prepare:remote-desktop-runtime && bun run verify:remote-desktop-runtime && bun run prepare:cua-driver && bun run build && bun scripts/package-macos-local.ts --artifacts",
     "dist:win": "bun run voice:prepare-runtime && bun scripts/prepare-remote-desktop-runtime.ts win32 x64 && bun run verify:remote-desktop-runtime --windows && bun scripts/install-cua-driver.ts win32 x64 && bun run build && electron-builder --win nsis --x64 --publish never",
     "dist:linux": "bun run voice:prepare-runtime && bun scripts/prepare-remote-desktop-runtime.ts linux x64 && bun run verify:remote-desktop-runtime --linux && bun scripts/install-cua-driver.ts linux x64 && bun run build && electron-builder --linux AppImage --x64 --publish never",
     "dist:linux:arm64": "bun run voice:prepare-runtime && bun scripts/install-cua-driver.ts linux arm64 && bun run build && electron-builder --linux AppImage --arm64 --publish never",

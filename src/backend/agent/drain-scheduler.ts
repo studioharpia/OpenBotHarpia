@@ -27,6 +27,7 @@ import {
   type TagReferenceSource,
 } from "./delivery-content";
 import type { DuplicationGate } from "./duplication-gate";
+import { executionConcurrency } from "./execution-concurrency";
 import type { MailboxSync } from "./mailbox-sync";
 import type { MemoryHold } from "./memory-hold";
 import type { PlanContinuation } from "./plan-continuation";
@@ -359,20 +360,13 @@ export class DrainScheduler {
     )
       return "one-turn";
     const channelId = laneChannelId(taskId);
-    // One channel turn of the agent at a time, across its channels.
-    if (
-      channelId !== null &&
-      this.#lanesOf(agentId).some(
-        (other) => other.taskId !== taskId && laneChannelId(other.taskId) !== null && this.#laneRunning(other),
-      )
-    )
-      return "channel-turn";
-    if (taskId !== null && channelId === null) {
-      if (this.#tasks.threadId(taskId) === null) return "task-closed";
-      const running = this.#tasks
-        .openTaskIds(agentId)
-        .filter((other) => other !== taskId && this.#laneRunning({ agentId, taskId: other })).length;
-      if (running >= this.#tasks.limit(agentId)) return "task-limit";
+    if (taskId !== null) {
+      if (channelId === null && this.#tasks.threadId(taskId) === null) return "task-closed";
+      const running = this.#lanesOf(agentId).filter(
+        (other) => other.taskId !== null && other.taskId !== taskId && this.#laneRunning(other),
+      ).length;
+      const taskLimit = this.#tasks.limit(agentId);
+      if (running >= Math.min(taskLimit, executionConcurrency(taskLimit))) return "task-limit";
     }
     // The agent's own process restarts when its access or account changed. A turn of another lane
     // runs on it, so this lane waits for that turn to end.

@@ -1,4 +1,9 @@
-import { type InviteLinkPayload, isCanonicalInviteUrl, parseInviteUrl } from "@openbot/contracts/invite-links";
+import {
+  type InviteLinkOptions,
+  type InviteLinkPayload,
+  isCanonicalInviteUrl,
+  parseInviteUrl,
+} from "@openbot/contracts/invite-links";
 import type { DynamicRecord } from "@openbot/contracts/runtime-values";
 import { Effect, Schema } from "effect";
 import {
@@ -13,6 +18,7 @@ import { type RemoteControlPlane, RemoteControlPlaneError } from "./remote-contr
 import type { AuthUser, TeamInviteEmailDelivery } from "./types";
 
 export interface TeamInviteEmailServices {
+  inviteLinks?: InviteLinkOptions;
   auth: Pick<AuthService, "enforceTeamInviteRateLimit">;
   remote: Pick<RemoteControlPlane, "emailableInvite">;
   delivery: () => TeamInviteEmailDelivery | null;
@@ -32,7 +38,7 @@ export const sendTeamInviteEmail = Effect.fn("TeamInviteEmail.send")(function* (
 ) {
   const invalid = () => new AuthServiceError(400, "invalid_invitation", "The invitation details are invalid.");
   const body = yield* Schema.decodeUnknownEffect(Invitation)(input).pipe(Effect.mapError(invalid));
-  const link = inviteLink(body.inviteUrl);
+  const link = inviteLink(body.inviteUrl, services.inviteLinks);
   if (!link) return yield* invalid();
   const email = yield* Effect.try({
     try: () => normalizeEmail(body.email),
@@ -79,10 +85,11 @@ export const sendTeamInviteEmail = Effect.fn("TeamInviteEmail.send")(function* (
 
 /** The bearer and cookie routes share the same invitation workflow. */
 
-function inviteLink(value: string): InviteLinkPayload | null {
+function inviteLink(value: string, options: InviteLinkOptions = {}): InviteLinkPayload | null {
   if (value.length > 4_096 || /[\r\n]/u.test(value)) return null;
   try {
-    return isCanonicalInviteUrl(value) ? parseInviteUrl(value) : null;
+    if (options.selfHostedApiOrigin && new URL(value).origin !== options.selfHostedApiOrigin) return null;
+    return isCanonicalInviteUrl(value, options) ? parseInviteUrl(value, options) : null;
   } catch {
     return null;
   }

@@ -819,6 +819,8 @@ export interface MobileWorkspaceContextValue {
   updateAgentBackupModels: (input: UpdateAgentBackupModelsInput, serverId: string) => Promise<AgentBackupModelSettings>;
   /** An owner or admin of an online host that serves `agent-task-limit-v1`. The host checks the role again. */
   canManageAgentTaskLimit: (serverId: string) => boolean;
+  /** Maximum accepted by the negotiated host contract; a disconnected/legacy host keeps 4. */
+  agentTaskLimitMax: (serverId: string) => number;
   /**
    * How many threads of the agent run at the same time. Null when the host does not advertise
    * `agent-task-limit-v1`. Owners and admins only; the host refuses a member.
@@ -1182,6 +1184,7 @@ type MobileWorkspaceStateKey =
   | "canManageAgentHostSettings"
   | "canManageAgentBackupModels"
   | "canManageAgentTaskLimit"
+  | "agentTaskLimitMax"
   | "canManageAgentNewChat"
   | "canManageAgentPlanCard"
   | "canManageAgentInstructions"

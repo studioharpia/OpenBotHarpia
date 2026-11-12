@@ -9,10 +9,30 @@ import {
   AGENT_SESSION_SETTINGS_ROUTES,
 } from "@openbot/contracts/team-protocol/agent-session-settings-v1";
 import {
+  AGENT_TASK_LIMIT_V2_CAPABILITY,
+  AGENT_TASK_LIMIT_V2_ROUTES,
+} from "@openbot/contracts/team-protocol/agent-task-limit-v2";
+import {
+  AGENT_TASK_TRANSFER_CAPABILITY,
+  AGENT_TASK_TRANSFER_ROUTE,
+} from "@openbot/contracts/team-protocol/agent-task-transfer-v1";
+import {
+  AGENT_THREAD_MESSAGE_ACTIONS_CAPABILITY,
+  AGENT_THREAD_MESSAGE_ACTIONS_ROUTES,
+} from "@openbot/contracts/team-protocol/agent-thread-message-actions-v1";
+import {
   BROWSER_SECRET_VAULT_CAPABILITY,
   BROWSER_SECRET_VAULT_ROUTES,
 } from "@openbot/contracts/team-protocol/browser-secret-vault-v1";
 import { CHAT_COLORS_CAPABILITY } from "@openbot/contracts/team-protocol/chat-colors-v1";
+import {
+  HOST_TASK_COMPLETIONS_CAPABILITY,
+  HOST_TASK_COMPLETIONS_ROUTE,
+} from "@openbot/contracts/team-protocol/host-task-completions-v1";
+import {
+  MESSAGE_DELIVERY_CAPABILITY,
+  MESSAGE_DELIVERY_ROUTE,
+} from "@openbot/contracts/team-protocol/message-delivery-v1";
 import {
   MODEL_VISIBILITY_CAPABILITY,
   MODEL_VISIBILITY_ROUTES,
@@ -165,6 +185,7 @@ import {
   parseDeleteConversationMessage,
   parseInterrupt,
   parseMarkAgentTaskRead,
+  parseMarkAgentTaskUnread,
   parseMarkConversationRead,
   parseMarkConversationUnread,
   parseMessageReaction,
@@ -186,6 +207,8 @@ import {
   parseSidebarFolderAction,
   parseStartAgentTask,
   parseSteerQueuedMessage,
+  parseTaskMessageReaction,
+  parseTransferAgentTask,
   parseUpdateAgent,
   parseUpdateQueuedMessage,
 } from "./agent-inputs";
@@ -331,8 +354,10 @@ export function agentIpcHandlers({
         remote: (input, serverId) =>
           remoteServers.supportsCapability(serverId, "host-analytics")
             ? runCauseEffect(
-                remoteServers.request(serverId, `${TEAM_API_ROUTES.analytics}?${hostAnalyticsQuery(input)}`, (value) =>
-                  assertHostAnalyticsScope(decodeHostAnalyticsFromHost(value), input),
+                remoteServers.request(
+                  serverId,
+                  `${remoteServers.supportsCapability(serverId, HOST_TASK_COMPLETIONS_CAPABILITY) ? HOST_TASK_COMPLETIONS_ROUTE : TEAM_API_ROUTES.analytics}?${hostAnalyticsQuery(input)}`,
+                  (value) => assertHostAnalyticsScope(decodeHostAnalyticsFromHost(value), input),
                 ),
               )
             : null,
@@ -908,6 +933,19 @@ export function agentIpcHandlers({
       sendMessage: scopedHandler(parseSendMessage, {
         local: (input) => runCauseEffect(service.sendMessage(input, host.conversationSender())),
         remote: (input, serverId) => {
+          if (input.deliveryMode) {
+            if (!remoteServers.supportsCapability(serverId, MESSAGE_DELIVERY_CAPABILITY)) taskRemoteUnsupported();
+            return runCauseEffect(
+              remoteServers.request(serverId, MESSAGE_DELIVERY_ROUTE, decodeQueuedMessageReceipt, {
+                method: "POST",
+                body: {
+                  ...input,
+                  attachmentDraftIds: input.attachmentDraftIds ?? [],
+                  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                },
+              }),
+            );
+          }
           if (input.taskId) {
             const replyToMessageId = input.replyToMessageId;
             if (replyToMessageId)
@@ -977,7 +1015,10 @@ export function agentIpcHandlers({
           if (!remoteServers.supportsCapability(serverId, AGENT_TASKS_CAPABILITY))
             return { agentId, tasks: [], limit: 1 };
           const init = { method: "POST", body: { agentId } } as const;
-          const tasks = remoteServers.request(serverId, AGENT_TASKS_ROUTES.list, decodeRemoteAgentTasks, init);
+          const route = remoteServers.supportsCapability(serverId, AGENT_TASK_LIMIT_V2_CAPABILITY)
+            ? AGENT_TASK_LIMIT_V2_ROUTES.list
+            : AGENT_TASKS_ROUTES.list;
+          const tasks = remoteServers.request(serverId, route, decodeRemoteAgentTasks, init);
           if (!remoteServers.supportsCapability(serverId, AGENT_THREAD_BRANCHES_CAPABILITY))
             return runCauseEffect(tasks);
           return runCauseEffect(
@@ -1057,6 +1098,13 @@ export function agentIpcHandlers({
           );
         },
       }),
+      transferTask: scopedHandler(parseTransferAgentTask, {
+        local: (input) => runCauseEffect(service.transferTask(input)),
+        remote: (input, serverId) => {
+          if (!remoteServers.supportsCapability(serverId, AGENT_TASK_TRANSFER_CAPABILITY)) taskRemoteUnsupported();
+          return remoteThreadRequest(serverId, AGENT_TASK_TRANSFER_ROUTE, input);
+        },
+      }),
       stopTask: scopedHandler(parseAgentTask, {
         local: (parsed) => runCauseEffect(service.stopTask(parsed)),
         remote: (parsed, serverId) =>
@@ -1108,6 +1156,32 @@ export function agentIpcHandlers({
             remoteServers.request(serverId, AGENT_THREAD_READS_ROUTES.mark, decodeRemoteTaskReadState, {
               method: "POST",
               body: { agentId: parsed.agentId, taskId: parsed.taskId, throughMessageId: parsed.throughMessageId },
+            }),
+          );
+        },
+      }),
+      markTaskUnread: scopedHandler(parseMarkAgentTaskUnread, {
+        local: (parsed) => host.markAgentTaskUnread(parsed),
+        remote: (parsed, serverId) => {
+          if (!remoteServers.supportsCapability(serverId, AGENT_THREAD_MESSAGE_ACTIONS_CAPABILITY))
+            taskRemoteUnsupported();
+          return runCauseEffect(
+            remoteServers.request(serverId, AGENT_THREAD_MESSAGE_ACTIONS_ROUTES.unread, decodeRemoteTaskReadState, {
+              method: "POST",
+              body: parsed,
+            }),
+          );
+        },
+      }),
+      setTaskMessageReaction: scopedHandler(parseTaskMessageReaction, {
+        local: (parsed) => runCauseEffect(host.setAgentTaskMessageReaction(parsed)),
+        remote: (parsed, serverId) => {
+          if (!remoteServers.supportsCapability(serverId, AGENT_THREAD_MESSAGE_ACTIONS_CAPABILITY))
+            taskRemoteUnsupported();
+          return runCauseEffect(
+            remoteServers.request(serverId, AGENT_THREAD_MESSAGE_ACTIONS_ROUTES.reaction, decodeVoid, {
+              method: "POST",
+              body: parsed,
             }),
           );
         },

@@ -2,6 +2,13 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "Podaj identyfikator zadania i agenta docelowego.",
+  "error.backend.taskTransferFailed": "OpenBot nie mógł przenieść zadania. Spróbuj ponownie.",
+  "error.backend.taskTransferOwnChatOnly":
+    "Przenoś zadania z własnego czatu, a nie z kanału, rozmowy zewnętrznej lub innego zadania.",
+  "error.backend.threadTransferBusy": "To zadanie ma pracę w toku lub oczekującą i nie można go jeszcze przenieść.",
+  "error.backend.threadTransferRoutine": "Zadań powiązanych z procedurami nie można przenieść do innego agenta.",
+
   "error.backend.eventsUnavailable": "Zdarzenia nie są dostępne na tym hoście.",
   "error.backend.databaseIntegrity": "Baza danych OpenBot nie przeszła kontroli integralności.",
   "error.backend.webhookRouteLimit": "Host może mieć maksymalnie {limit} rutyn typu webhook.",
@@ -382,6 +389,8 @@ export const messages = {
   "error.backend.taskTitleRequired": "Nadaj zadaniu krótki tytuł.",
   "error.backend.taskToolInvalid":
     "Nadaj zadaniu tytuł o długości maksymalnie 120 znaków i opis, który mówi, co zrobić.",
+  "error.backend.taskRenameInvalid": "Podaj identyfikator zadania i tytuł o długości do 120 znaków.",
+  "error.backend.taskRenameFailed": "OpenBot nie mógł zmienić nazwy zadania. Spróbuj ponownie.",
   "error.backend.taskOwnChatOnly":
     "Zadanie możesz rozpocząć tylko z własnego czatu. Kanał, rozmowa w komunikatorze ani inne zadanie nie mogą go rozpocząć.",
   "error.backend.taskUnfinishedLimit":

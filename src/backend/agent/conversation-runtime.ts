@@ -576,6 +576,15 @@ export class ConversationRuntime {
     this.registerExecutionThread(agentId, threadId);
   }
 
+  /** A transfer keeps the durable thread but discards snapshots bound to its previous agent. */
+  transferTaskThread(agentId: string, threadId: string): void {
+    this.#executionSnapshots.delete(threadId);
+    this.#dropCachedExecutionSnapshot(threadId);
+    this.#conversationSignatures.delete(threadId);
+    this.#unstoredSends.delete(threadId);
+    this.registerTaskThread(agentId, threadId);
+  }
+
   isTaskThread(threadId: string | null): boolean {
     return threadId !== null && this.#taskThreads.has(threadId);
   }
@@ -627,9 +636,9 @@ export class ConversationRuntime {
       return execution;
     }
     const cached = this.#snapshots.get(agentId);
-    if (cached && (!threadId || cached.threadId === threadId)) return cached;
+    if (cached && (!publicId || cached.threadId === publicId)) return cached;
     const agent = this.#store.list().find((candidate) => candidate.id === agentId);
-    const publicThreadId = agent?.threadId ?? threadId;
+    const publicThreadId = agent?.threadId ?? publicId;
     const page = this.#store.database.readConversationPage(agentId, publicThreadId, { type: "latest" }, 100);
     const snapshot: ConversationSnapshot = {
       agentId,

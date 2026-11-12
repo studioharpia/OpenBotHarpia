@@ -2,6 +2,28 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/conversation";
 
 export const messages = {
+  "conversation.threads.error.transfer": "Görev taşınamadı.",
+
+  "conversation.sidePanel.pane.central": "Ajan merkezi",
+  "conversation.central.mainChat": "Ana sohbet",
+  "conversation.central.overview": "Genel bakış",
+  "conversation.central.currentMonth": "Bu ay",
+  "conversation.central.previousMonth": "Geçen ay",
+  "conversation.central.tokens": "Kullanılan tokenlar",
+  "conversation.central.finishedTasks": "Tamamlanan görevler",
+  "conversation.central.finishedHint":
+    "Görevler ilk başarılı tamamlanma tarihine göre bir kez sayılır. Arşivlenen görevler dahildir.",
+  "conversation.central.completedTasks": "Tamamlananlar",
+  "conversation.central.inProgressTasks": "Devam edenler",
+  "conversation.central.emptySection": "Bu bölümde görev yok.",
+  "conversation.central.statusRunning": "Çalışıyor",
+  "conversation.central.statusStarting": "Bağlanıyor",
+  "conversation.central.statusReady": "Kullanılabilir",
+  "conversation.central.statusUnavailable": "Kullanılamıyor",
+  "conversation.central.activity": "Token etkinliği",
+  "conversation.central.archivedTasks": "Arşivlenmiş",
+  "conversation.central.newTask": "Yeni görev",
+  "conversation.central.taskActions": "{title} için işlemler",
   "conversation.globalSearch.title": "OpenBot'ta ara",
   "conversation.globalSearch.filter": "Sonuçları filtrele",
   "conversation.globalSearch.tab.all": "Tümü",
@@ -63,6 +85,8 @@ export const messages = {
   "conversation.sidePanel.pane.browser": "Tarayıcı",
   "conversation.sidePanel.pane.files": "Dosyalar",
   "conversation.threads.new": "Yeni mesaj dizisi",
+  "conversation.threads.showSidebar": "Görevleri yan çubukta göster",
+  "conversation.threads.showTopbar": "Görevleri üst çubukta göster",
   "conversation.threads.all": "Tüm mesaj dizileri",
   "conversation.threads.open": "Açık mesaj dizileri",
   "conversation.threads.current": "Mesaj dizisi: {title}",

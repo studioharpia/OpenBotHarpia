@@ -1,6 +1,7 @@
 import { createScrollFades } from "@openbot/ui/components/createScrollFades";
 import type { AgentMessage } from "@openbot/ui/data";
 import type { RoutineRunToggleMarkerModel } from "@openbot/ui/features/conversation/ChatActionMarker";
+import { chronologicalMessageRows, imageMessageRows } from "@openbot/ui/features/conversation/ChatMessageRow";
 import {
   calculateChatScrollMargin,
   chatHistoryBoundaryReached,
@@ -159,7 +160,11 @@ export function createScrollStore(deps: ScrollStoreDeps) {
     // names the step. A bubble that grows as the text arrives moves the chat at each line.
     const complete = progressUpdates ? shown.filter((message) => !held(message)) : shown;
     const questionTurnId = deps.props.channel ? undefined : deps.props.prompt?.turnId;
-    return summarizeHostedSiteMessages(withQuestionContext(complete, deps.props.messages, questionTurnId));
+    // The host keeps complete turns together for paging/read cursors. The visible chat follows the
+    // actual event times, including queued turns, prompts and notices between their responses.
+    return summarizeHostedSiteMessages(
+      chronologicalMessageRows(withQuestionContext(complete, deps.props.messages, questionTurnId)),
+    );
   });
   const routineRunTurns = createMemo(() => routineRunTurnMessages(deps.props.messages, shownMessages()));
   /* The messages of a routine run follow its row and open and close with it. */
@@ -230,11 +235,34 @@ export function createScrollStore(deps: ScrollStoreDeps) {
    * row its new index one tick after the list changes, so a lookup by index draws the neighbouring
    * message in the row for that tick.
    */
-  const timelineIndexById = createMemo(() => {
+  const timelineMessageIndexById = createMemo(() => {
     const indexes = new Map<VirtualItem["key"], number>();
     timelineMessages().forEach((message, index) => {
       indexes.set(message.id, index);
       indexes.set(rowKey(message), index);
+    });
+    return indexes;
+  });
+  const timelineMediaRows = createMemo(() => {
+    const state = deps.props.contextState;
+    const startedAt =
+      state?.agentId === deps.props.agent?.id && state?.threadId === deps.props.agent?.threadId
+        ? state?.compaction?.startedAt
+        : undefined;
+    const compacted = startedAt
+      ? timelineMessages().find((message) => message.createdAt && Date.parse(message.createdAt) > startedAt)?.id
+      : undefined;
+    return imageMessageRows(timelineMessages(), {
+      before: new Set([unreadBoundaryMessageId(), compacted].filter((id): id is string => typeof id === "string")),
+    });
+  });
+  const timelineIndexById = createMemo(() => {
+    const indexes = new Map<VirtualItem["key"], number>();
+    timelineMediaRows().forEach((row, index) => {
+      for (const message of row.messages) {
+        indexes.set(message.id, index);
+        indexes.set(rowKey(message), index);
+      }
     });
     return indexes;
   });
@@ -290,18 +318,15 @@ export function createScrollStore(deps: ScrollStoreDeps) {
   // A channel row is mostly a short message under an author; an agent row is often a longer answer.
   const rowEstimate = untrack(() => deps.props.channel) ? 84 : 128;
   const messageVirtualizer = createChatVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: () => timelineMessages().length,
+    count: () => timelineMediaRows().length,
     getScrollElement: () => deps.elements.scrollElement() ?? null,
     estimateSize: () => rowEstimate,
     getItemKey: (index) => {
-      const message = timelineMessages()[index];
+      const message = timelineMediaRows()[index]?.messages[0];
       return message ? rowKey(message) : index;
     },
     keyVersion: () => {
-      const messages = timelineMessages();
-      const first = messages[0];
-      const last = messages.at(-1);
-      return `${first ? rowKey(first) : ""}:${last ? rowKey(last) : ""}`;
+      return JSON.stringify(timelineMediaRows().map((row) => rowKey(row.messages[0])));
     },
     scrollMargin: virtualScrollMargin,
     stickToLatest: deps.sticky.getStickToLatest,
@@ -428,6 +453,8 @@ export function createScrollStore(deps: ScrollStoreDeps) {
     clearNewMessages,
     messageVirtualizer,
     timelineMessages,
+    timelineMediaRows,
+    timelineMessageIndexById,
     toggleRoutineRun,
     toggleAgentMessage,
     timelineIndexById,

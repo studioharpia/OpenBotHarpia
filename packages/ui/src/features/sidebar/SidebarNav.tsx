@@ -67,7 +67,10 @@ export function SidebarNav() {
         <Show when={props.showingArchivedChannels}>
           <section class="sidebar-chat-group sidebar-section" aria-label={t("sidebar.deletedChannels.title")}>
             <h2 class="sidebar-section-name">{t("sidebar.deletedChannels.title")}</h2>
-            <For each={props.deletedChannels} fallback={<p>{t("sidebar.deletedChannels.empty")}</p>}>
+            <For
+              each={props.deletedChannels?.filter((channel) => !props.unreadOnly || channel.unreadCount > 0)}
+              fallback={<p>{t("sidebar.deletedChannels.empty")}</p>}
+            >
               {(channel) => <SidebarChannelRow channel={channel} />}
             </For>
           </section>

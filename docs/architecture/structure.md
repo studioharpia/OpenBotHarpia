@@ -90,6 +90,9 @@ SolidJS, provider, Cloudflare, and application code; and the account server to d
   Muse and Devin XDG folders are provider-owned login and resume state. They are not OpenBot
   conversation storage.
 - D1 is the source of truth for central accounts, remote membership, invitations, and logical sessions.
+  No alvo opcional VPS, `apps/auth-api/src/vps/` adapta essas mesmas operações para
+  `accounts.sqlite` e mantém os objetos em `objects.sqlite`; a identidade e os bancos
+  pertencem ao diretório persistente do serviço. Ver [contas em VPS](../contas-vps.md).
 - Stripe is the source of truth for paid plans. D1 `billing_subscriptions` is a copy that the Stripe
   webhook keeps current; see [Billing](servers.md#billing).
 - A local team host owns conversations, files, agents, and the local member projection used by Team API.
@@ -183,3 +186,9 @@ Desktop sidebar persistence stays in `sidebar-pins-storage.ts` and `sidebar-sect
 The main conversation controller, application contexts, and platform adapters stay in the
 renderer. Further extraction requires explicit runtime inputs for those dependencies. React
 Native uses brand tokens and contracts, not these DOM components.
+
+### Templates de prompts
+
+- `src/renderer/src/features/templates/`: página, persistência pessoal e composição dos prompts do desktop.
+- `packages/ui/src/features/templates/composer-templates.ts`: modelo e composição tipada para os editores compartilhados.
+- `packages/ui/src/features/conversation/composer-picker.ts`: opção de template no seletor existente.

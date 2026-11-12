@@ -133,10 +133,13 @@ import type {
   AgentTasksSnapshot,
   BranchAgentTaskInput,
   MarkAgentTaskReadInput,
+  MarkAgentTaskUnreadInput,
   ReadAgentTaskPageInput,
   RenameAgentTaskInput,
   RunQueuedMessageAsTaskInput,
+  SetAgentTaskMessageReactionInput,
   StartAgentTaskInput,
+  TransferAgentTaskInput,
 } from "./ipc-agent-tasks";
 import type {
   AgentTemplateDetail,
@@ -1691,6 +1694,7 @@ export const IPC_ENDPOINTS = {
     runQueuedMessageAsTask: scopedRequest<RunQueuedMessageAsTaskInput, AgentTask>()("agent:tasks:run-queued-message"),
     // A joined server takes this through `agent-thread-branches-v1`.
     branchTask: scopedRequest<BranchAgentTaskInput, AgentTask>()("agent:tasks:branch"),
+    transferTask: scopedRequest<TransferAgentTaskInput, void>()("agent:tasks:transfer"),
     stopTask: scopedRequest<AgentTaskInput, void>()("agent:tasks:stop"),
     closeTask: scopedRequest<AgentTaskInput, void>()("agent:tasks:close"),
     reopenTask: scopedRequest<AgentTaskInput, void>()("agent:tasks:reopen"),
@@ -1700,6 +1704,8 @@ export const IPC_ENDPOINTS = {
     // A joined server takes these through `agent-thread-reads-v1`.
     listTaskReads: scopedRequest<string, AgentTaskReadState[]>()("agent:tasks:reads"),
     markTaskRead: scopedRequest<MarkAgentTaskReadInput, AgentTaskReadState>()("agent:tasks:mark-read"),
+    markTaskUnread: scopedRequest<MarkAgentTaskUnreadInput, AgentTaskReadState>()("agent:tasks:mark-unread"),
+    setTaskMessageReaction: scopedRequest<SetAgentTaskMessageReactionInput, void>()("agent:tasks:set-message-reaction"),
     acknowledgeFailedTurn: scopedRequest<AcknowledgeFailedTurnInput, void>()("agent:acknowledge-failed-turn"),
     cancelQueuedMessage: scopedRequest<CancelQueuedMessageInput, void>()("agent:cancel-queued-message"),
     steerQueuedMessage: scopedRequest<SteerQueuedMessageInput, void>()("agent:steer-queued-message"),

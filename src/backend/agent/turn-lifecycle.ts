@@ -88,7 +88,7 @@ import {
   toolUsage,
   toThreadItem,
 } from "./thread-items";
-import { TurnTraces, traceMessage } from "./turn-traces";
+import { type SteerTimingEvent, TurnTraces, traceMessage } from "./turn-traces";
 import { collectProviderUsage } from "./usage-collection";
 import { USAGE_LIMIT_METHOD, type UsageLimitGate } from "./usage-limit-gate";
 
@@ -302,6 +302,9 @@ export interface TurnLifecycleOptions {
  * arms context compaction or schedules the next drain via hooks.
  */
 export class TurnLifecycle {
+  observeSteerTiming(event: SteerTimingEvent): void {
+    this.#traces.steer(event);
+  }
   readonly #store: AgentStore;
   readonly #mailbox: MailboxStore;
   readonly #mailboxSync: MailboxSync;
@@ -818,6 +821,8 @@ export class TurnLifecycle {
         const itemId = getString(params, "itemId");
         const delta = notification.method === "item/reasoning/summaryPartAdded" ? "\n\n" : getString(params, "delta");
         if (!turnId || !itemId || delta === null) return;
+        if (notification.method === "item/agentMessage/delta" && delta.trim())
+          this.#traces.assistantText(turnId, itemId);
         this.#itemTurns.set(itemId, turnId);
         const publicThreadId = this.#conversation.publicThreadId(agentId, threadId);
         const snapshot = this.#conversation.ensureSnapshot(agentId, publicThreadId);
@@ -1936,6 +1941,8 @@ export class TurnLifecycle {
     completed: boolean,
   ) {
     const usage = completed ? toolUsage(item) : null;
+    if (item.type === "agentMessage" && item.text?.trim() && isString(item.id))
+      this.#traces.assistantText(turnId, item.id);
     if (usage) this.#hooks.emitToolUsage({ ...usage, agentId, turnId });
     if (yield* this.#images.handleItem(agentId, threadId, turnId, item, completed)) return;
     const toolProgress = toolProgressText(item, completed);

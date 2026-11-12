@@ -637,7 +637,10 @@ export class TeamWebRtcHostPeer {
         cause: new GatewayError(401, "remote_session_missing", sourceText("error.remote.sessionNotReady")),
       });
     const url = yield* remoteDecode(() => new URL(input.path, `http://127.0.0.1:${this.#localApiPort}`));
-    if (url.origin !== `http://127.0.0.1:${this.#localApiPort}` || !url.pathname.startsWith("/v1/")) {
+    if (
+      url.origin !== `http://127.0.0.1:${this.#localApiPort}` ||
+      (!url.pathname.startsWith("/v1/") && teamSideRouteCodec(url.pathname) === null)
+    ) {
       return yield* new RemoteWorkflowError({
         cause: new GatewayError(400, "invalid_operation_path", "The Team API path is invalid."),
       });

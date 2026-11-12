@@ -1,4 +1,4 @@
-import { AudioLines, DropdownMenu, File, MessageCircleQuestionMark, Plus, Puzzle } from "@openbot/ui";
+import { AudioLines, DropdownMenu, File, List, MessageCircleQuestionMark, Plus, Puzzle } from "@openbot/ui";
 import { useText } from "@openbot/ui/text";
 import { Show } from "solid-js";
 
@@ -15,6 +15,8 @@ export interface ComposerAddMenuProps {
   onSideQuestion?: (() => void) | undefined;
   /** Without it, no voice conversation item. */
   onVoice?: (() => void) | undefined;
+  /** Explicitly waits for the running turn instead of steering it. */
+  onQueue?: (() => void) | undefined;
 }
 
 /** The "+" menu of a message box: files, skills, and the side panes of the agent. */
@@ -49,6 +51,14 @@ export function ComposerAddMenu(props: ComposerAddMenuProps) {
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content aria-label={t("composer.add.label")}>
+          <Show when={props.onQueue}>
+            {(queue) => (
+              <DropdownMenu.Item onSelectAfterClose={() => queue()()}>
+                <List aria-hidden="true" />
+                <span>{t("composer.add.queue")}</span>
+              </DropdownMenu.Item>
+            )}
+          </Show>
           <Show when={props.onAttach}>
             <DropdownMenu.Item
               disabled={props.attachDisabled ?? false}

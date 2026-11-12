@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "템플릿 작업",
+  "composer.templates.hint": "채팅에서 /를 입력하여 저장한 프롬프트를 삽입하세요.",
+  "composer.templates.new": "새 템플릿",
+  "composer.templates.empty": "템플릿이 없습니다.",
+  "composer.templates.editor": "프롬프트 템플릿",
+  "composer.templates.name": "이름",
+  "composer.templates.prompt": "프롬프트",
+  "composer.templates.storageError": "템플릿을 읽거나 저장할 수 없습니다.",
+  "composer.templates.delete": "템플릿을 삭제할까요?",
+  "composer.templates.noMatch": "일치하는 템플릿이 없습니다.",
+  "composer.templates.list": "프롬프트 템플릿",
   "composer.queueEdit.body": "대기열의 메시지를 수정하는 중이에요. 수정을 저장하거나 취소해야 실행돼요.",
   "composer.queueEdit.cancel": "수정 취소",
   "composer.providerWait.offlineTitle": "인터넷에 연결되어 있지 않아요",
@@ -73,6 +84,7 @@ export const messages = {
   "composer.placeholder.message": "{name}에게 메시지 보내기",
   "composer.placeholder.messageAgent": "에이전트에게 메시지 보내기",
   "composer.add.label": "프롬프트에 추가",
+  "composer.add.queue": "메시지 대기열에 추가",
   "composer.add.files": "파일 첨부",
   "composer.add.skill": "스킬 사용",
   "composer.upload.cancel": "업로드 취소",

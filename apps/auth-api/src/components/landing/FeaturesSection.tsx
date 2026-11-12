@@ -25,6 +25,7 @@ import {
 } from "../../lib/landing-content";
 import type { FeatureDescriptionPart } from "../../lib/landing-page-text";
 import { LANDING_WORKFLOW_EDGE_MS, LANDING_WORKFLOW_PATHS, workflowTiming } from "../../lib/landing-workflow";
+import { loadClientAgentAvatar } from "../client-agent-avatar";
 import { createLandingReveal } from "./createLandingReveal";
 import { LandingFace } from "./LandingFace";
 import { LandingIcon } from "./LandingIcon";
@@ -32,9 +33,7 @@ import { useLandingText } from "./LandingText";
 
 // Loaded after the page is in the browser, as on the agent template page: the
 // avatar engine is too large for the first load of the home page.
-const AgentAvatar = lazy(() =>
-  import("@openbot/ui/features/agents/AgentAvatar").then((module) => ({ default: module.AgentAvatar })),
-);
+const AgentAvatar = lazy(loadClientAgentAvatar);
 
 /** The second marquee row runs the other way, so it starts from the other end of the list. */
 const PROVIDER_ROWS = [LANDING_PROVIDERS, [...LANDING_PROVIDERS].reverse()];

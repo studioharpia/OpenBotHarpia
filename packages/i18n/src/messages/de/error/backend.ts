@@ -2,6 +2,15 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "Gib die Aufgaben-ID und die ID des Zielagenten an.",
+  "error.backend.taskTransferFailed": "OpenBot konnte die Aufgabe nicht übertragen. Versuche es erneut.",
+  "error.backend.taskTransferOwnChatOnly":
+    "Übertrage Aufgaben aus deinem eigenen Chat, nicht aus einem Kanal, einem externen Gespräch oder einer anderen Aufgabe.",
+  "error.backend.threadTransferBusy":
+    "Diese Aufgabe hat laufende oder ausstehende Arbeit und kann noch nicht verschoben werden.",
+  "error.backend.threadTransferRoutine":
+    "Mit Routinen verknüpfte Aufgaben können nicht zu einem anderen Agenten verschoben werden.",
+
   "error.backend.eventsUnavailable": "Auf diesem Host sind keine Ereignisse verfügbar.",
   "error.backend.databaseIntegrity": "Die OpenBot-Datenbank hat die Integritätsprüfung nicht bestanden.",
   "error.backend.webhookRouteLimit": "Ein Host kann höchstens {limit} Webhook-Routinen haben.",
@@ -411,6 +420,8 @@ export const messages = {
   "error.backend.taskTitleRequired": "Gib der Aufgabe einen kurzen Titel.",
   "error.backend.taskToolInvalid":
     "Gib der Aufgabe einen Titel mit höchstens 120 Zeichen und eine kurze Beschreibung, was zu tun ist.",
+  "error.backend.taskRenameInvalid": "Gib die Aufgaben-ID und einen Titel mit höchstens 120 Zeichen an.",
+  "error.backend.taskRenameFailed": "OpenBot konnte die Aufgabe nicht umbenennen. Versuche es erneut.",
   "error.backend.taskOwnChatOnly":
     "Starte eine Aufgabe nur aus deinem eigenen Chat. Ein Kanal, eine Messaging-Unterhaltung oder eine andere Aufgabe kann keine starten.",
   "error.backend.taskUnfinishedLimit":

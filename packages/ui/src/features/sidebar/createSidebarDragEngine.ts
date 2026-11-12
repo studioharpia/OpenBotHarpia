@@ -13,6 +13,7 @@
 import type { TeamPresenceMember } from "@openbot/contracts/ipc";
 import { createBoundedDragPreview } from "../../components/createBoundedDragPreview";
 import type { createScrollFades } from "../../components/createScrollFades";
+import { taskTransferInProgress } from "../conversation/threads/task-transfer-drag";
 
 import { clearSidebarDragDecorations, createSidebarChatDragCard, measureSidebarDragSlots } from "./sidebar-drag-dom";
 import {
@@ -200,7 +201,7 @@ export function createSidebarDragEngine(deps: SidebarDragEngineDeps) {
     event: DragEvent & { currentTarget: HTMLElement },
     options: SidebarNativeDragStart,
   ): void {
-    if (deps.props.compact) {
+    if (deps.props.compact || taskTransferInProgress()) {
       event.preventDefault();
       return;
     }
@@ -228,6 +229,10 @@ export function createSidebarDragEngine(deps: SidebarDragEngineDeps) {
 
   /** One drag for both row kinds: `chatId` is an agent id or a channel id. */
   function startChatDragging(event: DragEvent & { currentTarget: HTMLElement }, chatId: string): void {
+    if (event.target instanceof Element && event.target.closest(".sidebar-agent-thread")) {
+      event.preventDefault();
+      return;
+    }
     if (deps.props.compact) return;
     startNativeItemDragging(event, {
       className: "sidebar-agent-drag-preview",

@@ -33,6 +33,15 @@ export function createSidebarDataStore(deps: {
   const directThreadByMember = createMemo(
     () => new Map(props.directThreads.map((thread) => [thread.otherMemberId, thread])),
   );
+  const agentVisible = (id: string) => {
+    if (!props.unreadOnly) return true;
+    if (props.agentHasUnread) return props.agentHasUnread(id);
+    return (
+      props.agentStates[id]?.kind === "unread" ||
+      (props.agentThreads?.items(id) ?? []).some((thread) => (thread.unread ?? 0) > 0)
+    );
+  };
+  const channelVisible = (channel: ChannelSummary) => !props.unreadOnly || channel.unreadCount > 0;
   const chatPinnedItems = createMemo(() =>
     props.pinnedItems.filter((item) => item.kind === "agent" || item.kind === "channel"),
   );
@@ -67,12 +76,13 @@ export function createSidebarDataStore(deps: {
       if (ref.kind === "agent") {
         const agent = agentById().get(ref.id);
         // A hidden agent keeps its pin, so a restore puts it back in the strip.
-        if (agent && !agentIsUserHidden(agent.id))
+        if (agent && !agentIsUserHidden(agent.id) && agentVisible(agent.id))
           items.push(resolve(ref, agent, { ref, chat: { kind: "agent", id: agent.id, agent } }));
       }
       if (ref.kind === "channel") {
         const channel = channelById().get(ref.id);
-        if (channel) items.push(resolve(ref, channel, { ref, chat: { kind: "channel", id: channel.id, channel } }));
+        if (channel && channelVisible(channel))
+          items.push(resolve(ref, channel, { ref, chat: { kind: "channel", id: channel.id, channel } }));
       }
     }
     pinnedItemCache = nextCache;
@@ -81,7 +91,9 @@ export function createSidebarDataStore(deps: {
   const listedAgents = createMemo(() =>
     props.agents.filter(
       (agent) =>
-        !agentIsUserHidden(agent.id) && !pinnedKeys().has(sidebarPinnedItemKey({ kind: "agent", id: agent.id })),
+        !agentIsUserHidden(agent.id) &&
+        agentVisible(agent.id) &&
+        !pinnedKeys().has(sidebarPinnedItemKey({ kind: "agent", id: agent.id })),
     ),
   );
   /**
@@ -113,12 +125,15 @@ export function createSidebarDataStore(deps: {
   /** The hidden agents, pinned ones included, in their layout order. They are not drag sources. */
   const userHiddenAgentList = createMemo(() =>
     sortByLayoutOrder(
-      props.agents.filter((agent) => agentIsUserHidden(agent.id)),
+      props.agents.filter((agent) => agentIsUserHidden(agent.id) && agentVisible(agent.id)),
       props.layout.agentOrder,
     ),
   );
   const listedChannels = createMemo(() =>
-    channels().filter((channel) => !pinnedKeys().has(sidebarPinnedItemKey({ kind: "channel", id: channel.id }))),
+    channels().filter(
+      (channel) =>
+        channelVisible(channel) && !pinnedKeys().has(sidebarPinnedItemKey({ kind: "channel", id: channel.id })),
+    ),
   );
   const filteredChannels = createMemo(() => listedChannels().filter((channel) => !chatWaits(channel.id)));
   /**
@@ -160,15 +175,17 @@ export function createSidebarDataStore(deps: {
     agents: listedAgents().filter((agent) => chatWaits(agent.id)),
   }));
   const orderedPeople = createMemo(() => {
-    const natural = [...props.people].sort((left, right) => {
-      const leftThread = directThreadByMember().get(left.id);
-      const rightThread = directThreadByMember().get(right.id);
-      if (leftThread || rightThread) {
-        return (rightThread?.updatedAt ?? "").localeCompare(leftThread?.updatedAt ?? "");
-      }
-      if (left.online !== right.online) return left.online ? -1 : 1;
-      return teamMemberName(left).localeCompare(teamMemberName(right));
-    });
+    const natural = props.people
+      .filter((member) => !props.unreadOnly || (directThreadByMember().get(member.id)?.unreadCount ?? 0) > 0)
+      .sort((left, right) => {
+        const leftThread = directThreadByMember().get(left.id);
+        const rightThread = directThreadByMember().get(right.id);
+        if (leftThread || rightThread) {
+          return (rightThread?.updatedAt ?? "").localeCompare(leftThread?.updatedAt ?? "");
+        }
+        if (left.online !== right.online) return left.online ? -1 : 1;
+        return teamMemberName(left).localeCompare(teamMemberName(right));
+      });
     const orderIndex = new Map(props.peopleOrder.map((memberId, index) => [memberId, index]));
     const naturalIndex = new Map(natural.map((member, index) => [member.id, index]));
     return natural.sort(
@@ -197,7 +214,13 @@ export function createSidebarDataStore(deps: {
   const visibleSectionIds = createMemo(() =>
     props.layout.order.filter((sectionId) => {
       if (sectionId === SIDEBAR_PEOPLE_SECTION_ID) return props.showPeople !== false && orderedPeople().length > 0;
-      if (customSectionById().has(sectionId)) return true;
+      if (customSectionById().has(sectionId)) {
+        if (!props.unreadOnly) return true;
+        const parents = sidebarFolderParents(props.layout);
+        return [...filteredChatsBySection().keys()].some(
+          (id) => id === sectionId || sidebarFolderAncestors(parents, id).includes(sectionId),
+        );
+      }
       if (sectionId !== SIDEBAR_UNASSIGNED_SECTION_ID) return false;
       return (filteredChatsBySection().get(sectionId)?.length ?? 0) > 0;
     }),

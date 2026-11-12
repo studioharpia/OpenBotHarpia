@@ -555,7 +555,18 @@ export class MailboxStore {
       }
 
       const recipients = [...new Set(input.recipientAgentIds)];
-      const validateRecipients = this.prepareDelivery(recipients);
+      const validateAgents = this.prepareDelivery(recipients);
+      const validateRecipients = () => {
+        validateAgents();
+        if (input.taskId === undefined) return;
+        const task = this.#database.connection
+          .prepare(`SELECT agent_id, archived_at FROM projection_agent_threads
+          WHERE legacy_task_id = ? OR (legacy_task_id IS NULL AND thread_id = ?)`)
+          .get(input.taskId, input.taskId);
+        if (!task || task.agent_id !== recipients[0] || task.archived_at !== null)
+          throw new Error(sourceText("error.backend.threadNotFound"));
+      };
+      validateRecipients();
       if (recipients.length === 0) throw new Error(sourceText("error.backend.recipientRequired"));
       if (input.taskId !== undefined && recipients.length !== 1) throw new Error("A task message has one recipient.");
       if (recipients.length > INPUT_LIMITS.messageRecipients) {
@@ -1028,6 +1039,60 @@ export class MailboxStore {
       (delivery) =>
         delivery.recipientAgentId === agentId && isActiveDelivery(delivery) && this.#taskIdOf(delivery) === taskId,
     );
+  }
+
+  /** Pending incoming or outgoing work must not follow an old agent's routing after a move. */
+  taskTransferBusy(agentId: string, taskId: string): boolean {
+    if (this.taskBusy(agentId, taskId)) return true;
+    return this.#state.messages.some(
+      (message) =>
+        message.sender.kind === "agent" &&
+        message.sender.agentId === agentId &&
+        message.senderTaskId === taskId &&
+        message.expectsReply !== false &&
+        this.#state.deliveries.some(
+          (delivery) =>
+            delivery.messageId === message.id &&
+            (isActiveDelivery(delivery) ||
+              (delivery.status === "completed" && !this.hasReplyFrom(delivery.recipientAgentId, message.id))),
+        ),
+    );
+  }
+
+  /** Saves task file ownership and settled delivery routing in the task move's SQLite transaction. */
+  transferTaskWith<T>(
+    sourceAgentId: string,
+    targetAgentId: string,
+    taskId: string,
+    threadId: string,
+    write: () => T,
+  ): T {
+    const messageIds = new Set(
+      this.#state.messages.filter((message) => message.taskId === taskId).map((message) => message.id),
+    );
+    const changedDeliveries = this.#state.deliveries.filter(
+      (delivery) => delivery.recipientAgentId === sourceAgentId && messageIds.has(delivery.messageId),
+    );
+    const files = this.#state.generatedAttachments.filter((file) => file.ownerThreadId === threadId);
+    const next: StoredState = {
+      ...this.#state,
+      deliveries: this.#state.deliveries.map((delivery) =>
+        changedDeliveries.includes(delivery) ? { ...delivery, recipientAgentId: targetAgentId } : delivery,
+      ),
+      generatedAttachments: this.#state.generatedAttachments.map((file) =>
+        files.includes(file) ? { ...file, ownerAgentId: targetAgentId } : file,
+      ),
+    };
+    // Keep this intent separate from unrelated pending mailbox changes, and mutate live state only after commit.
+    const changes = {
+      ...this.#changes,
+      deliveryIds: new Set([...this.#changes.deliveryIds, ...changedDeliveries.map((delivery) => delivery.id)]),
+      generatedAttachmentIds: new Set([...this.#changes.generatedAttachmentIds, ...files.map((file) => file.id)]),
+    };
+    const result = this.#database.persistMailboxChangesWith(next, changes, "agent-task.transferred", write);
+    this.#state = next;
+    this.#clearChanges();
+    return result;
   }
 
   /**
@@ -1715,14 +1780,12 @@ export class MailboxStore {
   }
 
   /**
-   * The person's messages queued right after this one in its lane, which start in the same turn.
-   * Each turn makes the provider read the whole session again, so messages that waited together are
-   * read together. The run stops at the first message of another kind or of another person, so the
-   * queue order stays.
+   * The queued messages already belonging to the same turn stopped by a usage limit. New messages
+   * each start their own turn; a retry alone keeps the original turn's messages together.
    */
   userMessagesToStartWith(deliveryId: string): DeliveryContext[] {
     const next = this.#state.deliveries.find((candidate) => candidate.id === deliveryId);
-    if (!next) return [];
+    if (!next?.resumeAfterUsageLimit) return [];
     const messages = this.#messagesById();
     const first = this.#requireMessage(next.messageId, messages);
     if (!isChatMessageFromPerson(first)) return [];

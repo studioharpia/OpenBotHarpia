@@ -40,10 +40,10 @@
  * - `license-upgrade`: Starter → Team monthly → Team yearly. A move to a lower plan is refused.
  * - `license-legacy-request`: a checkout request from an app before the tiers buys Team monthly (5 users at €70).
  * - `license-member-limits`: a new Starter hosted server takes 1 member (the owner), and a new Standard
- *   server takes 5. A server made before these limits (`legacy_member_limits = 1`) takes 3 on Starter and
+ *   server takes 5. A server made before these limits (`legacy_member_limits = 1`) takes 10 on Starter and
  *   10 on Standard.
- * - `license-self-hosted-limit`: a server with no plan takes 3 members with no license, the users of a
- *   Team license while it is active, and 3 again when it ends. Members who are active stay. A custom limit
+ * - `license-self-hosted-limit`: a server with no plan takes 10 members with no license, the users of a
+ *   Team license while it is active, and 10 again when it ends. Members who are active stay. A custom limit
  *   above the license users shows the license users, and a plan from before the license gives way to more
  *   license users.
  *
@@ -3044,16 +3044,16 @@ const scenarios: Record<Scenario, (account: Account) => Promise<void>> = {
       { memberLimit: freshLimit, status: refused.status, code: refused.code },
     );
     const joins = [];
-    for (const key of ["a", "b", "c"]) joins.push(await account.joinHost(key, legacyId));
+    for (let index = 1; index <= LEGACY_MEMBER_LIMITS.starter; index += 1)
+      joins.push(await account.joinHost(`legacy-starter-${index}`, legacyId));
     const legacyLimit = await hostMemberLimit(account, legacyId);
     record(
       "license-member-limits",
-      "a Starter server with legacy_member_limits = 1 allows 3 members: the host list shows 3, 2 members join next to the owner, and the third gets 409 member_limit_reached",
-      legacyLimit === 3 &&
-        joins[0]?.status === 200 &&
-        joins[1]?.status === 200 &&
-        joins[2]?.status === 409 &&
-        joins[2].code === "member_limit_reached",
+      `a Starter server with legacy_member_limits = 1 allows ${LEGACY_MEMBER_LIMITS.starter} members, and the next gets 409 member_limit_reached`,
+      legacyLimit === LEGACY_MEMBER_LIMITS.starter &&
+        joins.slice(0, -1).every((join) => join.status === 200) &&
+        joins.at(-1)?.status === 409 &&
+        joins.at(-1)?.code === "member_limit_reached",
       { memberLimit: legacyLimit, joins: joins.map((join) => ({ status: join.status, code: join.code })) },
     );
 
@@ -3105,46 +3105,57 @@ const scenarios: Record<Scenario, (account: Account) => Promise<void>> = {
     const hostId = `e2e-${account.scenario}-0`;
     const outcome = (join: { status: number; code: string | null }) => ({ status: join.status, code: join.code });
     const free = [];
-    for (const key of ["a", "b", "c"]) free.push(await account.memberJoins(key, 0));
+    for (let index = 1; index <= DEFAULT_TEAM_MEMBER_LIMIT; index += 1)
+      free.push(await account.memberJoins(`free-${index}`, 0));
     const freeLimit = await hostMemberLimit(account, hostId);
     record(
       "license-self-hosted-limit",
-      `no license: the host list shows ${DEFAULT_TEAM_MEMBER_LIMIT}, 2 members join next to the owner, and the third gets 409 member_limit_reached`,
+      `no license: the host list shows ${DEFAULT_TEAM_MEMBER_LIMIT}, ${DEFAULT_TEAM_MEMBER_LIMIT - 1} members join next to the owner, and the next gets 409 member_limit_reached`,
       freeLimit === DEFAULT_TEAM_MEMBER_LIMIT &&
-        free[0]?.status === 200 &&
-        free[1]?.status === 200 &&
-        free[2]?.status === 409 &&
-        free[2].code === "member_limit_reached",
+        free.slice(0, -1).every((join) => join.status === 200) &&
+        free.at(-1)?.status === 409 &&
+        free.at(-1)?.code === "member_limit_reached",
       { memberLimit: freeLimit, joins: free.map(outcome) },
     );
 
-    const sub = await account.buyLicense(5);
+    // Keep the owner and two free members for the smaller paid-license checks below.
+    for (let index = 3; index < DEFAULT_TEAM_MEMBER_LIMIT; index += 1) {
+      const [member] = d1(
+        `SELECT membership_id FROM remote_memberships WHERE host_id = ${quote(hostId)} AND user_id = ${quote(account.memberId(`free-${index}`))}`,
+        z.object({ membership_id: z.string() }),
+      );
+      const revoked = await account.request("DELETE", `v2/remote/hosts/${hostId}/members/${member?.membership_id}`);
+      if (revoked.status !== 204) throw new Error("Could not free the test member seat.");
+    }
+
+    const sub = await account.buyLicense(6);
     await licenseWhere(account, "license active", (state) => state.license?.status === "active");
     const licensedLimit = await waitFor("host list shows the license users", async () => {
       const limit = await hostMemberLimit(account, hostId);
-      return limit === 5 ? limit : null;
+      return limit === 6 ? limit : null;
     });
     const licensed = [];
-    for (const key of ["c", "d", "e"]) licensed.push(await account.memberJoins(key, 0));
+    for (const key of ["c", "d", "e", "f"]) licensed.push(await account.memberJoins(key, 0));
     record(
       "license-self-hosted-limit",
-      "a Team license of 5: the host list shows 5, 2 more members join, and the next gets 409 license_users_full",
-      licensedLimit === 5 &&
+      "a Team license of 6: the host list shows 6, three more members join, and the next gets 409 license_users_full",
+      licensedLimit === 6 &&
         licensed[0]?.status === 200 &&
         licensed[1]?.status === 200 &&
-        licensed[2]?.status === 409 &&
-        licensed[2].code === "license_users_full",
+        licensed[2]?.status === 200 &&
+        licensed[3]?.status === 409 &&
+        licensed[3].code === "license_users_full",
       { memberLimit: licensedLimit, joins: licensed.map(outcome) },
     );
 
-    const more = await account.request("POST", "v1/me/license/users", { users: 6 });
-    const sixth = await account.memberJoins("e", 0);
-    const sixLimit = await hostMemberLimit(account, hostId);
+    const more = await account.request("POST", "v1/me/license/users", { users: 7 });
+    const seventh = await account.memberJoins("f", 0);
+    const sevenLimit = await hostMemberLimit(account, hostId);
     record(
       "license-self-hosted-limit",
-      "after the owner adds a user to the license, the host list shows 6 and one more member joins",
-      more.status === 200 && sixth.status === 200 && sixLimit === 6,
-      { users: more.status, join: outcome(sixth), memberLimit: sixLimit },
+      "after the owner adds a user to the license, the host list shows 7 and one more member joins",
+      more.status === 200 && seventh.status === 200 && sevenLimit === 7,
+      { users: more.status, join: outcome(seventh), memberLimit: sevenLimit },
     );
 
     // A custom limit comes before the license, but the license still refuses a join after its users.
@@ -3159,13 +3170,13 @@ const scenarios: Record<Scenario, (account: Account) => Promise<void>> = {
     d1(`DELETE FROM server_member_limits WHERE server_id = ${quote(hostId)}`, z.unknown());
     record(
       "license-self-hosted-limit",
-      "a custom limit of 10 and a license of 6 users: the host list shows 6, and a join gets 409 license_users_full",
-      customLimit === 6 && overCustom.status === 409 && overCustom.code === "license_users_full",
+      "a custom limit of 10 and a license of 7 users: the host list shows 7, and a join gets 409 license_users_full",
+      customLimit === 7 && overCustom.status === 409 && overCustom.code === "license_users_full",
       { memberLimit: customLimit, join: outcome(overCustom) },
     );
 
     // A self-hosted host can keep a plan from before the license. With no hosted row, Starter has its
-    // legacy limit of 3, and the larger license gives the limit.
+    // legacy limit of 10, while the license still caps the total people at 7.
     const legacyPlan = `sub_e2e_${account.scenario}_legacy`;
     d1(
       `INSERT INTO billing_subscriptions(stripe_subscription_id, user_id, stripe_customer_id, server_id, plan, interval,
@@ -3179,8 +3190,8 @@ const scenarios: Record<Scenario, (account: Account) => Promise<void>> = {
     d1(`DELETE FROM billing_subscriptions WHERE stripe_subscription_id = ${quote(legacyPlan)}`, z.unknown());
     record(
       "license-self-hosted-limit",
-      "a Starter plan from before the license (3) and a license of 6 users: the host list shows 6, and a join gets 409 license_users_full",
-      planLimit === 6 && overPlan.status === 409 && overPlan.code === "license_users_full",
+      "a Starter plan from before the license (10) and a license of 7 users: the host list shows 7, and a join gets 409 license_users_full",
+      planLimit === 7 && overPlan.status === 409 && overPlan.code === "license_users_full",
       { memberLimit: planLimit, join: outcome(overPlan) },
     );
 
@@ -3203,14 +3214,20 @@ const scenarios: Record<Scenario, (account: Account) => Promise<void>> = {
     });
     record(
       "license-self-hosted-limit",
-      `the license ends: the host list shows ${DEFAULT_TEAM_MEMBER_LIMIT}, the 6 active members stay, and a join and a reactivation get 409 member_limit_reached`,
+      `the license ends: the host list shows ${DEFAULT_TEAM_MEMBER_LIMIT}, the 7 active members stay, and a new join and reactivation fit the free limit`,
       endedLimit === DEFAULT_TEAM_MEMBER_LIMIT &&
-        counted?.active === 6 &&
-        late.status === 409 &&
-        late.code === "member_limit_reached" &&
-        reactivated.status === 409 &&
-        reactivated.code === "member_limit_reached",
+        counted?.active === 7 &&
+        late.status === 200 &&
+        reactivated.status === 200,
       { memberLimit: endedLimit, active: counted?.active, join: outcome(late), reactivation: outcome(reactivated) },
+    );
+    const final = await account.memberJoins("last-seat", 0);
+    const over = await account.memberJoins("over-free-limit", 0);
+    record(
+      "license-self-hosted-limit",
+      "after the license ends, the tenth member joins and the eleventh gets 409 member_limit_reached",
+      final.status === 200 && over.status === 409 && over.code === "member_limit_reached",
+      { final: outcome(final), over: outcome(over) },
     );
   },
 

@@ -77,6 +77,10 @@ import {
   AGENT_TASK_LIMIT_CAPABILITY,
   AGENT_TASK_LIMIT_ROUTES,
 } from "@openbot/contracts/team-protocol/agent-task-limit-v1";
+import {
+  AGENT_TASK_LIMIT_V2_CAPABILITY,
+  AGENT_TASK_LIMIT_V2_ROUTES,
+} from "@openbot/contracts/team-protocol/agent-task-limit-v2";
 import { AGENT_TASKS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-tasks-v1";
 import {
   AGENT_THREAD_BRANCHES_CAPABILITY,
@@ -1076,7 +1080,9 @@ export function createHostRequestActions({
     // A host with `agent-thread-branches-v1` also gives the branch links, read after the tasks so that
     // each listed branch has its link, as on desktop.
     loadAgentTasks: async (agentId, serverId) => {
-      const snapshot = await runTeamRequest(listAgentTasks(tasksApi(serverId), agentId));
+      const snapshot = await runTeamRequest(
+        listAgentTasks(tasksApi(serverId), agentId, has(serverId, AGENT_TASK_LIMIT_V2_CAPABILITY)),
+      );
       if (!has(serverId, AGENT_THREAD_BRANCHES_CAPABILITY)) return snapshot;
       const links = await runTeamRequest(listAgentThreadBranches(threadBranchesApi(serverId), agentId));
       return withAgentThreadBranches(snapshot, links);
@@ -1179,11 +1185,27 @@ export function createHostRequestActions({
     },
     loadAgentTaskLimit: async (agentId, serverId) =>
       has(serverId, AGENT_TASK_LIMIT_CAPABILITY)
-        ? request("POST", AGENT_TASK_LIMIT_ROUTES.settings, decodeAgentTaskLimitSettings, { agentId }, serverId)
+        ? request(
+            "POST",
+            has(serverId, AGENT_TASK_LIMIT_V2_CAPABILITY)
+              ? AGENT_TASK_LIMIT_V2_ROUTES.settings
+              : AGENT_TASK_LIMIT_ROUTES.settings,
+            decodeAgentTaskLimitSettings,
+            { agentId },
+            serverId,
+          )
         : null,
     updateAgentTaskLimit: async (input, serverId) => {
       requireCapability(capabilities, serverId, AGENT_TASK_LIMIT_CAPABILITY, "mobile.agent.host.unsupported");
-      return request("POST", AGENT_TASK_LIMIT_ROUTES.update, decodeAgentTaskLimitSettings, { ...input }, serverId);
+      return request(
+        "POST",
+        has(serverId, AGENT_TASK_LIMIT_V2_CAPABILITY)
+          ? AGENT_TASK_LIMIT_V2_ROUTES.update
+          : AGENT_TASK_LIMIT_ROUTES.update,
+        decodeAgentTaskLimitSettings,
+        { ...input },
+        serverId,
+      );
     },
     loadAgentNewChat: async (agentId, serverId) =>
       has(serverId, AGENT_NEW_CHAT_CAPABILITY)

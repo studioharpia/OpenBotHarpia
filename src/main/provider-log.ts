@@ -16,6 +16,7 @@ const PROVIDER_LOG_PREFIXES = [
   "provider-models",
   "acp-client",
   "agent-error",
+  "message-latency",
 ] as const;
 
 /**

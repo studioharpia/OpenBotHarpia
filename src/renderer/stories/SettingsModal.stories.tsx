@@ -353,26 +353,6 @@ export const MobileConnect: Story = {
   render: () => <SettingsModalStory initialOpen initialTab="mobile-connect" />,
 };
 
-/** No plan yet. Choose a plan: the mock then shows it as active, as after a Stripe payment. */
-export const Billing: Story = {
-  render: () => <SettingsModalStory initialOpen initialTab="billing" />,
-};
-
-/** An account that can create hosted servers. Start, renew and delete change the mock list. */
-export const HostedServers: Story = {
-  render: () => <SettingsModalStory initialOpen hostedServers initialTab="hosted-servers" />,
-};
-
-/** "Manage servers" with a list that answers after 300 ms: the tab opens at once and shows no spinner. */
-export const HostedServersFastList: Story = {
-  render: () => <SettingsModalStory initialOpen hostedServers hostedServersDelayMs={300} openTab="hosted-servers" />,
-};
-
-/** "Manage servers" with a list that answers after 3 s: the spinner fades in after its delay. */
-export const HostedServersSlowList: Story = {
-  render: () => <SettingsModalStory initialOpen hostedServers hostedServersDelayMs={3_000} openTab="hosted-servers" />,
-};
-
 export const ScheduledRemoteUpdate: Story = {
   render: () => (
     <SettingsModalStory

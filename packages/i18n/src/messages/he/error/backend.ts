@@ -2,6 +2,12 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "יש לציין את מזהה המשימה ואת מזהה סוכן היעד.",
+  "error.backend.taskTransferFailed": "OpenBot לא הצליח להעביר את המשימה. נסו שוב.",
+  "error.backend.taskTransferOwnChatOnly": "יש להעביר משימות מהצ׳אט הראשי שלך, ולא מערוץ, שיחה חיצונית או משימה אחרת.",
+  "error.backend.threadTransferBusy": "במשימה זו יש עבודה פעילה או ממתינה ולכן עדיין לא ניתן להעביר אותה.",
+  "error.backend.threadTransferRoutine": "לא ניתן להעביר משימות המקושרות לשגרות לסוכן אחר.",
+
   "error.backend.eventsUnavailable": "אירועים אינם זמינים במארח הזה.",
   "error.backend.databaseIntegrity": "מסד הנתונים של OpenBot נכשל בבדיקת השלמות.",
   "error.backend.webhookRouteLimit": "במארח אחד יכולות להיות לכל היותר {limit} שגרות webhook.",
@@ -362,6 +368,8 @@ export const messages = {
   "error.backend.threadMoveRefused": "רק הודעה ששלחת לסוכן הזה לבדו יכולה לרוץ בשרשור חדש.",
   "error.backend.taskTitleRequired": "יש לתת למשימה כותרת קצרה.",
   "error.backend.taskToolInvalid": "יש לתת למשימה כותרת של עד 120 תווים ותקציר שאומר מה לעשות.",
+  "error.backend.taskRenameInvalid": "יש לציין את מזהה המשימה וכותרת באורך של עד 120 תווים.",
+  "error.backend.taskRenameFailed": "OpenBot לא הצליח לשנות את שם המשימה. יש לנסות שוב.",
   "error.backend.taskOwnChatOnly":
     "יש להתחיל משימה רק מהצ'אט שלך. ערוץ, שיחת הודעות או משימה אחרת אינם יכולים להתחיל משימה.",
   "error.backend.taskUnfinishedLimit":

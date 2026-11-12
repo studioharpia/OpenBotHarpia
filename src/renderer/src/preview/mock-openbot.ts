@@ -2923,6 +2923,53 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
         // As on a host, a repeated client id answers with the first receipt and stores nothing.
         const repeated = input.clientMessageId ? sentReceipts.get(input.clientMessageId) : undefined;
         if (repeated) return repeated;
+        const activeTurn = getSnapshot(input.agentId).activeTurnId;
+        if (activeTurn && input.deliveryMode) {
+          const messageId = `mock-message-${messageCounter++}`;
+          const deliveryId = `mock-delivery-${messageCounter++}`;
+          const steers =
+            input.deliveryMode === "steer" && (!input.expectedTurnId || input.expectedTurnId === activeTurn);
+          const createdAt = new Date().toISOString();
+          const queue = queues.get(input.agentId) ?? emptyQueue(input.agentId);
+          const delivery: QueueDelivery = {
+            id: deliveryId,
+            messageId,
+            recipientAgentId: input.agentId,
+            sender: { kind: "user" },
+            text: input.text,
+            attachments: [],
+            replyToMessageId: input.replyToMessageId ?? null,
+            status: steers ? "running" : "queued",
+            position: steers ? null : queue.deliveries.filter((d) => d.status === "queued").length + 1,
+            turnId: steers ? activeTurn : null,
+            error: null,
+            createdAt,
+          };
+          queue.deliveries.push(delivery);
+          queues.set(input.agentId, queue);
+          updateSnapshot(input.agentId, (snapshot) => {
+            snapshot.messages.push({
+              id: deliveryId,
+              author: "user",
+              source: "user",
+              text: input.text,
+              createdAt,
+              status: "completed",
+              ...(steers ? { turnId: activeTurn } : {}),
+              delivery: { id: deliveryId, status: delivery.status, position: delivery.position },
+              replyToMessageId: input.replyToMessageId ?? null,
+            });
+          });
+          emitAgentEvent({ type: "queue-changed", snapshot: queue });
+          const receipt: QueuedMessageReceipt = {
+            messageId,
+            deliveries: [
+              { id: deliveryId, recipientAgentId: input.agentId, status: delivery.status, position: delivery.position },
+            ],
+          };
+          if (input.clientMessageId) sentReceipts.set(input.clientMessageId, receipt);
+          return receipt;
+        }
         const messageId = `mock-message-${messageCounter++}`;
         const deliveryId = `mock-delivery-${messageCounter++}`;
         const turnId = `mock-turn-${messageCounter++}`;
@@ -3198,6 +3245,19 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
         Object.assign(task, { state: "idle", closedAt: null, updatedAt: new Date().toISOString() });
         emitTasks(input.agentId);
       },
+      transferTask: async (input) => {
+        const task = findTask(input.agentId, input.taskId);
+        tasks.set(
+          input.agentId,
+          (tasks.get(input.agentId) ?? []).filter((item) => item.id !== task.id),
+        );
+        task.agentId = input.targetAgentId;
+        tasks.set(input.targetAgentId, [...(tasks.get(input.targetAgentId) ?? []), task]);
+        const conversation = taskConversations.get(task.id);
+        if (conversation) conversation.agentId = input.targetAgentId;
+        emitTasks(input.agentId);
+        emitTasks(input.targetAgentId);
+      },
       renameTask: async (input) => {
         const task = findTask(input.agentId, input.taskId);
         Object.assign(task, { title: input.title, updatedAt: new Date().toISOString() });
@@ -3231,6 +3291,33 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
           firstUnreadMessageId: null,
           throughMessageId: input.throughMessageId,
         };
+      },
+      markTaskUnread: async (input) => {
+        const task = findTask(input.agentId, input.taskId);
+        const messages = taskConversation(task).messages;
+        const index = messages.findIndex((message) => message.id === input.fromMessageId);
+        if (index < 0) throw new Error(sourceText("error.backend.readBoundaryUnavailable"));
+        const unread = messages.slice(index).filter((message) => message.author !== "user");
+        taskUnread.set(input.taskId, unread.length);
+        return {
+          taskId: input.taskId,
+          unreadCount: unread.length,
+          firstUnreadMessageId: unread[0]?.id ?? null,
+          throughMessageId: messages[index - 1]?.id ?? null,
+        };
+      },
+      setTaskMessageReaction: async (input) => {
+        const task = findTask(input.agentId, input.taskId);
+        const snapshot = taskConversation(task);
+        const message = snapshot.messages.find((message) => message.id === input.messageId);
+        if (!message) throw new Error(sourceText("error.agent.messageUnavailable"));
+        message.reaction = input.emoji;
+        message.reactions = [
+          ...(message.reactions ?? []).filter((reaction) => reaction.actor.kind !== "user"),
+          ...(input.emoji ? [{ emoji: input.emoji, actor: { kind: "user" as const } }] : []),
+        ];
+        snapshot.revision += 1;
+        emitAgentEvent({ type: "agent-task-conversation", taskId: task.id, snapshot: clone(snapshot) });
       },
       acknowledgeFailedTurn: async () => undefined,
       cancelQueuedMessage: async (input) => {

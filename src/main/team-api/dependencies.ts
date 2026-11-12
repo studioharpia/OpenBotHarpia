@@ -335,7 +335,10 @@ export type TeamApiAgentTasks = Pick<
   | "deleteTask"
   | "listTaskReads"
   | "markTaskRead"
+  | "markTaskUnread"
+  | "setTaskMessageReaction"
   | "branchTask"
+  | "transferTask"
 >;
 
 /**

@@ -22,9 +22,12 @@ import { AGENT_PLAN_CARD_CODECS } from "./agent-plan-card-v1";
 import { AGENT_PUBLISH_CODECS } from "./agent-publish-v1";
 import { AGENT_SESSION_SETTINGS_CODECS } from "./agent-session-settings-v1";
 import { AGENT_TASK_LIMIT_CODECS } from "./agent-task-limit-v1";
+import { AGENT_TASK_LIMIT_V2_CODECS } from "./agent-task-limit-v2";
+import { AGENT_TASK_TRANSFER_CODECS } from "./agent-task-transfer-v1";
 import { AGENT_TASKS_CODECS } from "./agent-tasks-v1";
 import { AGENT_THREAD_BRANCHES_CODECS } from "./agent-thread-branches-v1";
 import { AGENT_THREAD_FILES_CODECS } from "./agent-thread-files-v1";
+import { AGENT_THREAD_MESSAGE_ACTIONS_CODECS } from "./agent-thread-message-actions-v1";
 import { AGENT_THREAD_PAGES_CODECS } from "./agent-thread-pages-v1";
 import { AGENT_THREAD_READS_CODECS } from "./agent-thread-reads-v1";
 import { AGENT_THREAD_REPLIES_CODECS } from "./agent-thread-replies-v1";
@@ -54,6 +57,7 @@ import { HOST_KEY_ROTATION_CODECS } from "./host-key-rotation-v1";
 import { HOST_MEMBER_UPDATE_CODECS } from "./host-member-update-v1";
 import { HOST_PERSONALITY_CODECS } from "./host-personality-v1";
 import { HOST_RELEASE_CODECS } from "./host-release-v1";
+import { HOST_TASK_COMPLETIONS_CODECS } from "./host-task-completions-v1";
 import { HOST_TIMEZONE_CODECS } from "./host-timezone-v1";
 import { HOST_UPDATE_CODECS } from "./host-update-v1";
 import { HOSTED_SITES_CODECS } from "./hosted-sites-v1";
@@ -66,6 +70,7 @@ import { MCP_SIGN_IN_APP_CODECS } from "./mcp-sign-in-app-v1";
 import { MCP_SIGN_IN_CODECS } from "./mcp-sign-in-v1";
 import { MEMORY_REVIEW_CODECS } from "./memory-review-v1";
 import { MESSAGE_DELETE_CODECS } from "./message-delete-v1";
+import { MESSAGE_DELIVERY_CODECS } from "./message-delivery-v1";
 import { MODEL_VISIBILITY_CODECS } from "./model-visibility-v1";
 import { ONEPASSWORD_CONNECTOR_CODECS } from "./onepassword-connector-v1";
 import { PASSWORD_MANAGERS_CODECS } from "./password-managers-v1";
@@ -128,6 +133,7 @@ const CODECS: ReadonlyMap<string, OptionalRouteCodec> = new Map([
   ...ACP_REGISTRY_CODECS,
   ...HOST_ADMIN_CODECS,
   ...HOST_UPDATE_CODECS,
+  ...HOST_TASK_COMPLETIONS_CODECS,
   ...HOST_TIMEZONE_CODECS,
   ...HOST_PERSONALITY_CODECS,
   ...HOST_KEY_ROTATION_CODECS,
@@ -154,6 +160,7 @@ const CODECS: ReadonlyMap<string, OptionalRouteCodec> = new Map([
   ...AGENT_HOST_SETTINGS_CODECS,
   ...AGENT_BACKUP_MODELS_CODECS,
   ...AGENT_TASK_LIMIT_CODECS,
+  ...AGENT_TASK_LIMIT_V2_CODECS,
   ...AGENT_NEW_CHAT_CODECS,
   ...AGENT_FOLDERS_CODECS,
   ...AGENT_FAST_MODE_CODECS,
@@ -197,9 +204,12 @@ const CODECS: ReadonlyMap<string, OptionalRouteCodec> = new Map([
   ...BROWSER_USER_CONTROL_CODECS,
   ...BROWSER_PAGE_STATE_CODECS,
   ...BROWSER_SIGN_IN_CODECS,
+  ...AGENT_TASK_TRANSFER_CODECS,
   ...AGENT_TASKS_CODECS,
   ...AGENT_THREADS_CODECS,
   ...AGENT_THREAD_READS_CODECS,
+  ...AGENT_THREAD_MESSAGE_ACTIONS_CODECS,
+  ...MESSAGE_DELIVERY_CODECS,
   ...AGENT_THREAD_FILES_CODECS,
   ...AGENT_THREAD_REPLIES_CODECS,
   ...AGENT_THREAD_BRANCHES_CODECS,

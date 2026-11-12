@@ -79,9 +79,11 @@ export function selfHostedApiOrigin(apiUrl: string | undefined): string | undefi
 
 export function createInviteUrl(payload: InviteLinkPayload, options: InviteLinkOptions = {}): string {
   validatePayload(payload, options);
-  // Our website does not open a self-hosted invitation, and must not receive its token.
-  if (isSelfHostedApiUrl(new URL(payload.apiUrl), options)) return createOpenBotInviteUrl(payload, options);
-  const url = new URL(OPENBOT_INVITE_PATH, OPENBOT_INVITE_ORIGIN);
+  // Self-hosted tokens stay on the account service configured by this client.
+  const origin = isSelfHostedApiUrl(new URL(payload.apiUrl), options)
+    ? options.selfHostedApiOrigin
+    : OPENBOT_INVITE_ORIGIN;
+  const url = new URL(OPENBOT_INVITE_PATH, origin);
   writePayload(url, payload);
   return url.toString();
 }
@@ -130,7 +132,9 @@ export function isCanonicalInviteUrl(value: string, options: InviteLinkOptions =
   try {
     parseInviteUrl(value, options);
     const url = new URL(value);
-    return url.origin === OPENBOT_INVITE_ORIGIN && url.pathname === OPENBOT_INVITE_PATH;
+    return (
+      (url.origin === OPENBOT_INVITE_ORIGIN || isSelfHostedApiUrl(url, options)) && url.pathname === OPENBOT_INVITE_PATH
+    );
   } catch {
     return false;
   }
@@ -145,14 +149,16 @@ export function parseInviteUrl(value: string, options: InviteLinkOptions = {}): 
   }
 
   const canonical =
-    url.protocol === "https:" && url.origin === OPENBOT_INVITE_ORIGIN && url.pathname === OPENBOT_INVITE_PATH;
+    url.protocol === "https:" &&
+    (url.origin === OPENBOT_INVITE_ORIGIN || isSelfHostedApiUrl(url, options)) &&
+    url.pathname === OPENBOT_INVITE_PATH;
   const customScheme =
     url.protocol === "openbot:" && url.hostname === "join" && (url.pathname === "" || url.pathname === "/");
   if (
     (!canonical && !customScheme) ||
     url.username !== "" ||
     url.password !== "" ||
-    url.port !== "" ||
+    (url.port !== "" && !isSelfHostedApiUrl(url, options)) ||
     url.hash !== "" ||
     !hasOnlyInviteFields(url.searchParams)
   ) {
@@ -166,6 +172,9 @@ export function parseInviteUrl(value: string, options: InviteLinkOptions = {}): 
     token: url.searchParams.get("invite") ?? "",
   };
   validatePayload(payload, options);
+  if (isSelfHostedApiUrl(url, options) && new URL(payload.apiUrl).origin !== url.origin) {
+    throw new Error("The OpenBot invitation link is invalid.");
+  }
   return payload;
 }
 

@@ -35,7 +35,14 @@ import {
 } from "./agent/sidebar-tools";
 import { LOCAL_SKILL_TOOL_DEFINITIONS } from "./agent/skill-tools";
 import { CREATE_WEBHOOK_ROUTINE_TOOL, UPDATE_WEBHOOK_ROUTINE_TOOL } from "./agent/webhook-routine-tool";
-import { START_TASK_TOOL, startTaskToolSchema } from "./agent-tasks/agent-tasks";
+import {
+  RENAME_TASK_TOOL,
+  renameTaskToolSchema,
+  START_TASK_TOOL,
+  startTaskToolSchema,
+  TRANSFER_TASK_TOOL,
+  transferTaskToolSchema,
+} from "./agent-tasks/agent-tasks";
 import {
   AWAIT_EVENT_TOOL,
   awaitEventToolSchema,
@@ -622,6 +629,18 @@ export const OPENBOT_TOOL_DEFINITIONS: readonly OpenBotToolDefinition[] = [
     description:
       "Start a task: a separate conversation of yours that runs beside this chat, with its own context, progress and stop. Use it only for long, independent work that the user asked for and that need not block this chat. The brief is the task's first message: write everything the task needs, because it does not see this chat. The task result stays in the task; you do not receive it. Only your own chat can start a task.",
     shape: startTaskToolSchema.shape,
+  },
+  {
+    name: RENAME_TASK_TOOL,
+    description:
+      "Rename a task that you created with start_task. Give its taskId and a short title (up to 120 characters). Use history_search without a query to find your tasks and their IDs. You cannot rename another agent's tasks, user-created threads, or routine threads. This changes only the title and keeps the conversation, execution and provider session.",
+    shape: renameTaskToolSchema.shape,
+  },
+  {
+    name: TRANSFER_TASK_TOOL,
+    description:
+      "Transfer one of your idle tasks to another agent on this server, only when the user asks. Give taskId from history_search without a query and targetAgentId from list_agents. Keeps the same history, attachments and unread markers; does not start work. You cannot move another agent's tasks, routine tasks, or tasks with running or pending work. Call from your own chat, not a channel, external conversation or another task.",
+    shape: transferTaskToolSchema.shape,
   },
   ...MEMORY_RECALL_TOOL_DEFINITIONS,
   {

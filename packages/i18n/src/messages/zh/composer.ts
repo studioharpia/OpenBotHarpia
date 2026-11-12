@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "模板操作",
+  "composer.templates.hint": "在聊天中输入 / 以填入已保存的提示词。",
+  "composer.templates.new": "新建模板",
+  "composer.templates.empty": "尚无模板。",
+  "composer.templates.editor": "提示词模板",
+  "composer.templates.name": "名称",
+  "composer.templates.prompt": "提示词",
+  "composer.templates.storageError": "无法读取或保存模板。",
+  "composer.templates.delete": "删除模板？",
+  "composer.templates.noMatch": "未找到匹配的模板。",
+  "composer.templates.list": "提示词模板",
   "composer.queueEdit.body": "你正在编辑一条排队中的消息。保存或取消编辑后它才会继续执行。",
   "composer.queueEdit.cancel": "取消编辑",
   "composer.providerWait.offlineTitle": "没有网络连接",
@@ -73,6 +84,7 @@ export const messages = {
   "composer.placeholder.message": "发消息给 {name}",
   "composer.placeholder.messageAgent": "给助手发消息",
   "composer.add.label": "添加到提示词",
+  "composer.add.queue": "消息排队",
   "composer.add.files": "附加文件",
   "composer.add.skill": "使用技能",
   "composer.upload.cancel": "取消上传",

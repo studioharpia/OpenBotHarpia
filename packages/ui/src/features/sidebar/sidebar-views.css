@@ -32,3 +32,131 @@
 .sidebar-history-button > svg:dir(rtl) {
   transform: scaleX(-1);
 }
+
+/* Task rows under their owner, with execution state before the title. */
+.sidebar-agent-threads {
+  margin-block: var(--openbot-space-2);
+  margin-inline: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sidebar-agent-thread {
+  position: relative;
+  padding-block: var(--openbot-space-0-5);
+}
+
+.sidebar-agent-thread-button.ui-button {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: var(--openbot-control-lg);
+  justify-content: flex-start;
+  gap: var(--openbot-space-2);
+  padding-inline: var(--openbot-space-4);
+  padding-inline-end: var(--openbot-space-2);
+  border: 0;
+  border-radius: var(--openbot-radius-md);
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-lg);
+  font-weight: var(--openbot-weight-medium);
+}
+
+.sidebar-agent-thread-button.ui-button:hover {
+  background-color: var(--openbot-bg-control-hover);
+}
+
+.sidebar-agent-thread-button.ui-button[aria-pressed="true"] {
+  background-color: var(--openbot-bg-control-active);
+  color: var(--openbot-text-primary);
+}
+
+.sidebar-agent-thread-icon {
+  display: flex;
+  width: var(--openbot-icon-md);
+  height: var(--openbot-icon-md);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-agent-thread-icon > svg {
+  width: var(--openbot-icon-sm);
+  height: var(--openbot-icon-sm);
+}
+
+.sidebar-agent-thread-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-pinned-list-threads {
+  width: 100%;
+}
+
+.sidebar-pinned-item.sidebar-pinned-item-threads {
+  width: 100%;
+  flex-basis: 100%;
+}
+
+.agent-row-preview-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-row-preview-line > .agent-row-preview {
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-agent-unread {
+  flex: 0 0 auto;
+  margin-inline: calc((var(--openbot-icon-md) - var(--openbot-space-2)) / 2);
+}
+
+/* Compact agent rows keep the sidebar width and all task/context-menu interactions. */
+.sidebar.sidebar-dense-agents:not(.sidebar-compact) .sidebar-agent-item > .agent-row:not(.sidebar-pinned-row) {
+  --agent-row-avatar-size: calc(var(--openbot-control-md) * 0.8);
+
+  height: calc(var(--openbot-control-md) * 0.8 + var(--openbot-space-2));
+  min-height: calc(var(--openbot-control-md) * 0.8 + var(--openbot-space-2));
+  padding-block: var(--openbot-space-1);
+}
+
+.sidebar.sidebar-dense-agents .sidebar-agent-item .agent-row-heading {
+  align-items: center;
+}
+
+.sidebar.sidebar-dense-agents .sidebar-agent-item .agent-row-title {
+  flex: 1;
+}
+
+/* The saved agent color tints the surface and a contrasting label. */
+.agent-role-badge.agent-role-badge-colored {
+  background-color: color-mix(in srgb, var(--agent-role-color) 28%, var(--openbot-transparent));
+  color: color-mix(in srgb, var(--agent-role-color) 55%, var(--openbot-text-primary));
+}
+
+.sidebar-agent-task-status {
+  --task-list-glyph: var(--openbot-icon-sm);
+  --task-list-ease: var(--openbot-ease-out);
+}
+
+.sidebar-agent-task-status .task-list-mark[data-state="done"] .task-list-mark-fill {
+  fill: var(--openbot-success);
+}
+
+/* The shared glyph has radius 7.25: show 60% of its circumference in this compact row. */
+.sidebar-agent-task-status .task-list-mark[data-state="active"] .task-list-mark-arc {
+  stroke-dasharray: 27.33 18.22;
+}
+
+.sidebar-agent-task-status[data-status="waiting"] {
+  color: var(--openbot-warning);
+}

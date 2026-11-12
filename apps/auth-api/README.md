@@ -6,6 +6,12 @@ and stores account avatars in R2. Users sign in with an eight-character
 one-time email code. D1 stores hashes instead of plaintext codes, session tokens,
 and team authentication tickets.
 
+## VPS própria
+
+O alvo independente `build:vps` executa as mesmas rotas em Bun, com SQLite e
+armazenamento de objetos no disco da VPS. Configuração, testes e preservação de
+identidade estão em [Serviço de contas em VPS própria](../../docs/contas-vps.md).
+
 ## Local development
 
 `.env.dev` is the committed encrypted development file. Local identity keys and saved overrides

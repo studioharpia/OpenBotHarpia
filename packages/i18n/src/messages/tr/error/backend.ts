@@ -2,6 +2,13 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "Görev kimliğini ve hedef ajanın kimliğini belirtin.",
+  "error.backend.taskTransferFailed": "OpenBot görevi aktaramadı. Tekrar deneyin.",
+  "error.backend.taskTransferOwnChatOnly":
+    "Görevleri bir kanaldan, harici konuşmadan veya başka bir görevden değil, kendi sohbetinizden aktarın.",
+  "error.backend.threadTransferBusy": "Bu görevde devam eden veya bekleyen işler var; henüz taşınamaz.",
+  "error.backend.threadTransferRoutine": "Rutinlere bağlı görevler başka bir ajana taşınamaz.",
+
   "error.backend.eventsUnavailable": "Bu ana makinede etkinlikler kullanılamıyor.",
   "error.backend.databaseIntegrity": "OpenBot veritabanı bütünlük denetiminden geçemedi.",
   "error.backend.webhookRouteLimit": "Bir ana makinede en fazla {limit} webhook rutini olabilir.",
@@ -375,6 +382,8 @@ export const messages = {
   "error.backend.taskTitleRequired": "Göreve kısa bir başlık verin.",
   "error.backend.taskToolInvalid":
     "Göreve en fazla 120 karakterlik bir başlık ve ne yapılacağını anlatan kısa bir talimat verin.",
+  "error.backend.taskRenameInvalid": "Görev kimliğini ve en fazla 120 karakterlik bir başlık belirtin.",
+  "error.backend.taskRenameFailed": "OpenBot görevi yeniden adlandıramadı. Tekrar deneyin.",
   "error.backend.taskOwnChatOnly":
     "Görevi yalnızca kendi sohbetinizden başlatın. Bir kanal, bir mesajlaşma konuşması veya başka bir görev yeni bir görev başlatamaz.",
   "error.backend.taskUnfinishedLimit":

@@ -43,6 +43,7 @@ import {
   type ListChannelRoutineRunsInput,
   type ListRoutineRunsInput,
   type MarkAgentTaskReadInput,
+  type MarkAgentTaskUnreadInput,
   type MarkConversationReadInput,
   type MarkConversationUnreadInput,
   type OpenAttachmentInput,
@@ -72,6 +73,7 @@ import {
   type SendMessageInput,
   type SetAgentAvatarInput,
   type SetAgentMemoryInclusionInput,
+  type SetAgentTaskMessageReactionInput,
   type SetChannelImageInput,
   type SetMessageReactionInput,
   type SidebarLayoutAction,
@@ -79,6 +81,7 @@ import {
   type SteerQueuedMessageInput,
   type TestChannelRoutineInput,
   type TestRoutineInput,
+  type TransferAgentTaskInput,
   type UpdateAgentInput,
   type UpdateAgentMemoryInput,
   type UpdateChannelMemoryInput,
@@ -550,6 +553,13 @@ function parsePageLimit(value: unknown): number {
 
 export function parseSendMessage(value: unknown): SendMessageInput {
   if (!isObject(value)) throw new Error("Invalid send message request.");
+  if (value.deliveryMode !== undefined && value.deliveryMode !== "queue" && value.deliveryMode !== "steer")
+    throw new Error("Invalid message delivery mode.");
+  if (
+    value.expectedTurnId !== undefined &&
+    (!isString(value.expectedTurnId) || !value.expectedTurnId || value.expectedTurnId.length > INPUT_LIMITS.identifier)
+  )
+    throw new Error("Invalid expected turn id.");
   const attachmentDraftIds = value.attachmentDraftIds ?? [];
   if (
     !Array.isArray(attachmentDraftIds) ||
@@ -593,6 +603,8 @@ export function parseSendMessage(value: unknown): SendMessageInput {
     text: value.text,
     attachmentDraftIds,
     replyToMessageId: replyToMessageId?.trim() || null,
+    ...(value.deliveryMode === undefined ? {} : { deliveryMode: value.deliveryMode }),
+    ...(value.expectedTurnId === undefined ? {} : { expectedTurnId: value.expectedTurnId }),
     ...(clientMessageId === undefined ? {} : { clientMessageId }),
     ...(taskId === undefined ? {} : { taskId }),
     ...(voiceRecordingDraftId === undefined ? {} : { voiceRecordingDraftId }),
@@ -646,6 +658,16 @@ export function parseBranchAgentTask(value: unknown): BranchAgentTaskInput {
   };
 }
 
+export function parseTransferAgentTask(value: unknown): TransferAgentTaskInput {
+  if (!isObject(value)) throw new Error("Invalid task transfer request.");
+  return {
+    agentId: requireString(value.agentId, "agentId", INPUT_LIMITS.identifier),
+    taskId: requireString(value.taskId, "taskId", INPUT_LIMITS.identifier),
+    targetAgentId: requireString(value.targetAgentId, "targetAgentId", INPUT_LIMITS.identifier),
+    requestId: requireString(value.requestId, "requestId", INPUT_LIMITS.identifier),
+  };
+}
+
 export function parseRenameAgentTask(value: unknown): RenameAgentTaskInput {
   const task = parseAgentTask(value);
   if (!isObject(value)) throw new Error("Invalid task request.");
@@ -658,6 +680,16 @@ export function parseMarkAgentTaskRead(value: unknown): MarkAgentTaskReadInput {
   const task = parseAgentTask(value);
   if (!isObject(value)) throw new Error("Invalid task request.");
   return { ...task, throughMessageId: requireString(value.throughMessageId, "throughMessageId") };
+}
+
+export function parseMarkAgentTaskUnread(value: unknown): MarkAgentTaskUnreadInput {
+  const task = parseAgentTask(value);
+  if (!isObject(value)) throw new Error("Invalid task request.");
+  return { ...task, fromMessageId: requireString(value.fromMessageId, "fromMessageId", INPUT_LIMITS.identifier) };
+}
+
+export function parseTaskMessageReaction(value: unknown): SetAgentTaskMessageReactionInput {
+  return { ...parseAgentTask(value), ...parseMessageReaction(value) };
 }
 
 export function parseMessageReaction(value: unknown): SetMessageReactionInput {

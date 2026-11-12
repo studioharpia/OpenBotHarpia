@@ -5,6 +5,7 @@ import {
   buttonVariants,
   DropdownMenu,
   Folder,
+  LayoutGrid,
   Maximize2,
   MessageCircleQuestionMark,
   Minimize2,
@@ -49,6 +50,7 @@ function fileValue(key: string): string {
  * The feature that owns a pane decides when it is available and renders its content.
  */
 const SIDE_PANEL_PANES = {
+  central: { label: "conversation.sidePanel.pane.central", icon: () => <LayoutGrid aria-hidden="true" /> },
   browser: { label: "conversation.sidePanel.pane.browser", icon: () => <ComputerIcon /> },
   files: { label: "conversation.sidePanel.pane.files", icon: () => <Folder aria-hidden="true" /> },
   settings: { label: "conversation.sidePanel.pane.settings", icon: () => <Settings aria-hidden="true" /> },
@@ -426,7 +428,13 @@ export function SidePanelHeader(props: SidePanelHeaderProps) {
 
   return (
     <>
-      <Tabs.Root ref={root} class="window-drag side-panel-header" value={selectedValue()} activationMode="automatic">
+      <Tabs.Root
+        id="conversation-side-panel-tabs"
+        ref={root}
+        class="window-drag side-panel-header"
+        value={selectedValue()}
+        activationMode="automatic"
+      >
         <Tabs.List ref={tabList} class="side-panel-tabs" aria-label={t("conversation.sidePanel.label")}>
           <For each={props.panes}>
             {(pane) => {

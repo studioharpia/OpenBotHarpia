@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "Azioni del modello",
+  "composer.templates.hint": "Digita / in una chat per inserire un prompt salvato.",
+  "composer.templates.new": "Nuovo modello",
+  "composer.templates.empty": "Nessun modello.",
+  "composer.templates.editor": "Modello di prompt",
+  "composer.templates.name": "Nome",
+  "composer.templates.prompt": "Prompt",
+  "composer.templates.storageError": "Impossibile leggere o salvare i modelli.",
+  "composer.templates.delete": "Eliminare il modello?",
+  "composer.templates.noMatch": "Nessun modello trovato.",
+  "composer.templates.list": "Modelli di prompt",
   "composer.queueEdit.body": "Stai modificando un messaggio in coda. Salva o annulla la modifica per farlo partire.",
   "composer.queueEdit.cancel": "Annulla modifica",
   "composer.providerWait.offlineTitle": "Nessuna connessione a Internet",
@@ -75,6 +86,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "Scrivi all'agente",
   "composer.placeholder.answer": "Scrivi la tua risposta",
   "composer.add.label": "Aggiungi al prompt",
+  "composer.add.queue": "Accoda messaggio",
   "composer.add.files": "Allega file",
   "composer.add.skill": "Usa una skill",
   "composer.upload.cancel": "Annulla caricamento",

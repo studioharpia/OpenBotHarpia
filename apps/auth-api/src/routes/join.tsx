@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/solid-router";
+import { createFileRoute, useLocation } from "@tanstack/solid-router";
 import { JoinPage } from "../components/landing/JoinPage";
 import { joinPageText } from "../components/transactional/page-text";
 import { loadPageText } from "../lib/page-text";
@@ -55,5 +55,13 @@ export const Route = createFileRoute("/join")({
 
 function Join() {
   const page = Route.useLoaderData();
-  return <JoinPage lang={page().lang} text={page().text} />;
+  const context = Route.useRouteContext();
+  const location = useLocation();
+  return (
+    <JoinPage
+      lang={page().lang}
+      text={page().text}
+      inviteUrl={new URL(location().href, context().siteUrl).toString()}
+    />
+  );
 }

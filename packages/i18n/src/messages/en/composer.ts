@@ -1,6 +1,17 @@
 import { defineMessages } from "../../message";
 
 export const messages = defineMessages("composer", {
+  "composer.templates.actions": "Template actions",
+  "composer.templates.hint": "Type / in any chat to fill the input with a saved prompt.",
+  "composer.templates.new": "New template",
+  "composer.templates.empty": "No templates yet.",
+  "composer.templates.editor": "Prompt template",
+  "composer.templates.name": "Name",
+  "composer.templates.prompt": "Prompt",
+  "composer.templates.storageError": "Could not read or save templates on this computer.",
+  "composer.templates.delete": "Delete template?",
+  "composer.templates.noMatch": "No matching templates.",
+  "composer.templates.list": "Prompt templates",
   "composer.queueEdit.body": "You are editing a queued message. Save or cancel the edit to let it run.",
   "composer.queueEdit.cancel": "Cancel edit",
   "composer.providerWait.offlineTitle": "No internet connection",
@@ -73,6 +84,7 @@ export const messages = defineMessages("composer", {
   "composer.placeholder.messageAgent": "Message agent",
   "composer.placeholder.answer": "Type your answer",
   "composer.add.label": "Add to prompt",
+  "composer.add.queue": "Queue message",
   "composer.add.files": "Attach files",
   "composer.add.skill": "Use a skill",
   "composer.upload.cancel": "Cancel upload",

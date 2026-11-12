@@ -4,14 +4,21 @@ import type {
   AgentTaskBranch,
   AgentTasksSnapshot,
   ConversationSnapshot,
+  MessageReaction,
 } from "@openbot/contracts/ipc";
 import type { AppTextKey } from "@openbot/i18n";
 import { currentText } from "@openbot/ui/text";
-import { createEffect, createMemo, createStore, untrack } from "solid-js";
+import { createEffect, createMemo, createStore, onCleanup, untrack } from "solid-js";
 import { actionToast } from "../../action-toast";
 import { desktopAnalytics } from "../../analytics";
 import { createScopeGuard } from "../../scope-lifetime";
 import type { AgentTasksPort } from "./agent-tasks-port";
+import {
+  readTaskFailureReads,
+  taskFailureStorageKey,
+  taskFailureVersion,
+  writeTaskFailureRead,
+} from "./task-failure-reads";
 
 export type AgentTaskEvent = Extract<
   AgentEvent,
@@ -28,6 +35,7 @@ export function isAgentTaskEvent(event: { type: string }): event is AgentTaskEve
 }
 
 interface AgentTasksState {
+  failureReads: Record<string, string>;
   /** The task list of each agent that loaded one, by agent id. */
   snapshots: Record<string, AgentTasksSnapshot>;
   /** The conversation of each task that loaded one, by task id. */
@@ -77,6 +85,9 @@ function withOlderMessages(held: ConversationSnapshot, snapshot: ConversationSna
 }
 
 export interface AgentTasksOptions {
+  failureReadScope?: string;
+  transferable?: (() => boolean) | undefined;
+  serverId?: (() => string) | undefined;
   /** Read on each call: tests and stories replace the port per case. */
   port: () => AgentTasksPort;
   activeAgentId: () => string | undefined;
@@ -88,6 +99,8 @@ export interface AgentTasksOptions {
   editable: () => boolean;
   /** The server keeps the person's read mark of each side thread: the `agent-thread-reads-v1` routes. */
   readable: () => boolean;
+  messageActions?: () => boolean;
+  messageDelivery?: () => boolean;
   /**
    * The server copies a conversation into a new thread: this computer, or the `agent-thread-branches-v1`
    * routes. The list of such a server gives the link of each branch; its events do not.
@@ -129,7 +142,38 @@ export function createAgentTasks(options: AgentTasksOptions) {
     pageable,
   } = options;
   const scopeIsCurrent = createScopeGuard();
-  const [state, setState] = createStore<AgentTasksState>({ snapshots: {}, conversations: {}, unread: {}, history: {} });
+  const failureStorageKey = options.failureReadScope ? taskFailureStorageKey(options.failureReadScope) : undefined;
+  const [state, setState] = createStore<AgentTasksState>({
+    snapshots: {},
+    conversations: {},
+    unread: {},
+    history: {},
+    failureReads: failureStorageKey ? readTaskFailureReads(failureStorageKey) : {},
+  });
+  if (failureStorageKey) {
+    const syncFailureReads = (event: StorageEvent) => {
+      if (event.key !== failureStorageKey) return;
+      setState((current) => {
+        current.failureReads = readTaskFailureReads(failureStorageKey);
+      });
+    };
+    window.addEventListener("storage", syncFailureReads);
+    onCleanup(() => window.removeEventListener("storage", syncFailureReads));
+  }
+  function failureRead(task: AgentTask): boolean {
+    const version = taskFailureVersion(task);
+    return version !== undefined && state.failureReads[task.id] === version;
+  }
+  function acknowledgeTaskFailure(task: AgentTask): void {
+    const version = taskFailureVersion(task);
+    if (!version || failureRead(task)) return;
+    const currentTask = state.snapshots[task.agentId]?.tasks.find((entry) => entry.id === task.id);
+    if (currentTask && taskFailureVersion(currentTask) !== version) return;
+    setState((current) => {
+      current.failureReads[task.id] = version;
+    });
+    if (failureStorageKey) writeTaskFailureRead(failureStorageKey, task.id, version);
+  }
   const listRequests = new Map<string, number>();
   const readRequests = new Map<string, number>();
   const unreadRequests = new Map<string, number>();
@@ -137,6 +181,12 @@ export function createAgentTasks(options: AgentTasksOptions) {
   const readMarks = new Map<string, string>();
   /** The threads whose mark move did not answer yet. A list read can be older than the move. */
   const marking = new Set<string>();
+  const heldUnread = new Set<string>();
+  const readOperations = new Map<string, Promise<unknown>>();
+  const canMessageActions = () =>
+    (options.messageActions?.() ?? local()) &&
+    port().markTaskUnread !== undefined &&
+    port().setTaskMessageReaction !== undefined;
   /** The threads that a tab shows now. Their conversations stay loaded. */
   let shown: ReadonlySet<string> = new Set();
   /** The threads with a loaded conversation that no tab shows, the one shown longest ago first. */
@@ -172,6 +222,12 @@ export function createAgentTasks(options: AgentTasksOptions) {
    */
   function showConversations(taskIds: readonly string[]): void {
     const next = new Set(taskIds);
+    for (const taskId of heldUnread) {
+      if (!next.has(taskId)) {
+        heldUnread.delete(taskId);
+        readMarks.delete(taskId);
+      }
+    }
     for (const taskId of shown) {
       if (next.has(taskId) || !untrack(() => state.conversations[taskId])) continue;
       hidden.delete(taskId);
@@ -188,6 +244,28 @@ export function createAgentTasks(options: AgentTasksOptions) {
    * server does not carry it, and a link does not change.
    */
   function setSnapshot(snapshot: AgentTasksSnapshot): void {
+    // Archiving/restoring changes updatedAt without producing another failed turn.
+    const acknowledged = untrack(() => {
+      const previous = new Map((state.snapshots[snapshot.agentId]?.tasks ?? []).map((task) => [task.id, task]));
+      return snapshot.tasks.filter((task) => {
+        const old = previous.get(task.id);
+        return (
+          old &&
+          failureRead(old) &&
+          old.outcome === task.outcome &&
+          old.error === task.error &&
+          ((old.state === "idle" && task.state === "closed") || (old.state === "closed" && task.state === "idle"))
+        );
+      });
+    });
+    for (const task of acknowledged) {
+      const version = taskFailureVersion(task);
+      if (!version) continue;
+      setState((current) => {
+        current.failureReads[task.id] = version;
+      });
+      if (failureStorageKey) writeTaskFailureRead(failureStorageKey, task.id, version);
+    }
     const ids = new Set(snapshot.tasks.map((task) => task.id));
     // An event handler runs this too: the stored list is input here, not a dependency.
     const links = untrack(() => {
@@ -333,7 +411,7 @@ export function createAgentTasks(options: AgentTasksOptions) {
 
   /**
    * A list from an event of a joined server has no branch links. When it has a task that the stored list
-   * does not have, the list is read again: the new task can be a branch from another device.
+   * does not have, or a task leaves, read it again: a transfer can also change remaining branch links.
    */
   function applyTasksChanged(snapshot: AgentTasksSnapshot): void {
     const stored = untrack(() => state.snapshots[snapshot.agentId]);
@@ -341,7 +419,11 @@ export function createAgentTasks(options: AgentTasksOptions) {
     // Each progress line sends a list too. Only a saved message or an end of a turn changes a count.
     const before = stored ? untrack(() => unreadKey(stored)) : undefined;
     applySnapshot(snapshot);
-    if (known && snapshot.tasks.some((task) => task.branch === undefined && !known.has(task.id)))
+    if (
+      known &&
+      (snapshot.tasks.some((task) => task.branch === undefined && !known.has(task.id)) ||
+        [...known].some((id) => !snapshot.tasks.some((task) => task.id === id)))
+    )
       void loadTasks(snapshot.agentId);
     // The host sends no event when a read mark moves, so a changed list reads the marks again.
     else if (unreadKey(snapshot) !== before) loadUnread(snapshot.agentId);
@@ -550,13 +632,14 @@ export function createAgentTasks(options: AgentTasksOptions) {
     return task;
   }
 
-  /** Steers the task's running turn, or queues the message in the task. */
+  /** Uses the agent's busy-message policy unless the person explicitly queues or steers. */
   async function sendToTask(
     agentId: string,
     taskId: string,
     text: string,
     attachmentDraftIds: string[] = [],
     replyToMessageId: string | null = null,
+    deliveryMode?: "queue" | "steer",
   ): Promise<boolean> {
     const receipt = await runAction(
       () =>
@@ -567,6 +650,14 @@ export function createAgentTasks(options: AgentTasksOptions) {
           ...(attachmentDraftIds.length ? { attachmentDraftIds } : {}),
           ...(replyToMessageId ? { replyToMessageId } : {}),
           clientMessageId: crypto.randomUUID(),
+          ...((options.messageDelivery?.() ?? local())
+            ? {
+                deliveryMode,
+                ...(state.conversations[taskId]?.activeTurnId
+                  ? { expectedTurnId: state.conversations[taskId]?.activeTurnId ?? undefined }
+                  : {}),
+              }
+            : {}),
         }),
       "conversation.threads.error.send",
     );
@@ -627,6 +718,39 @@ export function createAgentTasks(options: AgentTasksOptions) {
     return done !== null;
   }
 
+  const canTransfer = () => options.transferable?.() === true && port().transferTask !== undefined;
+  async function transferTask(
+    agentId: string,
+    taskId: string,
+    targetAgentId: string,
+    expectedServerId = options.serverId?.() ?? options.failureReadScope ?? "local",
+  ): Promise<boolean> {
+    if (
+      !canTransfer() ||
+      !scopeIsCurrent() ||
+      expectedServerId !== (options.serverId?.() ?? options.failureReadScope ?? "local")
+    )
+      return false;
+    const transfer = port().transferTask;
+    if (!transfer) return false;
+    const result = await runAction(
+      () => transfer({ agentId, taskId, targetAgentId, requestId: crypto.randomUUID() }),
+      "conversation.threads.error.transfer",
+    );
+    if (
+      result === null ||
+      !scopeIsCurrent() ||
+      expectedServerId !== (options.serverId?.() ?? options.failureReadScope ?? "local")
+    )
+      return false;
+    setState((current) => {
+      delete current.conversations[taskId];
+      delete current.history[taskId];
+    });
+    await Promise.all([loadTasks(agentId), loadTasks(targetAgentId)]);
+    return true;
+  }
+
   async function renameTask(agentId: string, taskId: string, title: string): Promise<boolean> {
     const done = await runAction(
       () => port().renameTask({ agentId, taskId, title }),
@@ -672,27 +796,81 @@ export function createAgentTasks(options: AgentTasksOptions) {
    * devices read the mark, so the phone no longer shows the thread as unread. The thread shows as
    * read at once. A failure keeps the old mark and shows its count again: the next message moves it.
    */
-  function markTaskRead(agentId: string, taskId: string, throughMessageId: string): void {
-    if (!readable() || readMarks.get(taskId) === throughMessageId) return;
+  function markTaskRead(
+    agentId: string,
+    taskId: string,
+    throughMessageId: string | null,
+    viewedTask?: AgentTask,
+  ): void {
+    if (heldUnread.has(taskId)) return;
+    const task = viewedTask ?? state.snapshots[agentId]?.tasks.find((entry) => entry.id === taskId);
+    if (task) acknowledgeTaskFailure(task);
+    if (!throughMessageId || !readable() || readMarks.get(taskId) === throughMessageId) return;
     readMarks.set(taskId, throughMessageId);
     // A list read that started before this mark has the old count.
     nextUnreadRequest(agentId);
     setUnread(agentId, taskId, 0);
     marking.add(taskId);
-    void port()
-      .markTaskRead({ agentId, taskId, throughMessageId })
+    const mark = port().markTaskRead;
+    const operation: Promise<void> = (readOperations.get(taskId) ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => mark({ agentId, taskId, throughMessageId }))
       .then((read) => {
-        if (readMarks.get(taskId) !== throughMessageId) return;
+        if (readMarks.get(taskId) !== throughMessageId || readOperations.get(taskId) !== operation) return;
         marking.delete(taskId);
         // A message that arrived after the mark stays unread.
         if (scopeIsCurrent()) setUnread(agentId, taskId, read.unreadCount);
       })
       .catch(() => {
-        if (readMarks.get(taskId) !== throughMessageId) return;
+        if (readMarks.get(taskId) !== throughMessageId || readOperations.get(taskId) !== operation) return;
         marking.delete(taskId);
         readMarks.delete(taskId);
         if (scopeIsCurrent()) loadUnread(agentId);
       });
+    readOperations.set(taskId, operation);
+    void operation.finally(() => {
+      if (readOperations.get(taskId) === operation) readOperations.delete(taskId);
+    });
+  }
+
+  async function markTaskUnread(agentId: string, taskId: string, fromMessageId: string): Promise<void> {
+    const mark = port().markTaskUnread;
+    if (!mark || !canMessageActions()) return;
+    heldUnread.add(taskId);
+    readMarks.delete(taskId);
+    nextUnreadRequest(agentId);
+    marking.add(taskId);
+    const operation = (readOperations.get(taskId) ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => mark({ agentId, taskId, fromMessageId }));
+    readOperations.set(taskId, operation);
+    try {
+      const read = await operation;
+      if (scopeIsCurrent() && readOperations.get(taskId) === operation) setUnread(agentId, taskId, read.unreadCount);
+    } catch (error) {
+      heldUnread.delete(taskId);
+      if (scopeIsCurrent()) {
+        loadUnread(agentId);
+        const { t, errorMessage } = currentText();
+        actionToast.error(errorMessage(error, t("chat.errorStatus.readState")));
+      }
+    } finally {
+      if (readOperations.get(taskId) === operation) {
+        marking.delete(taskId);
+        readOperations.delete(taskId);
+      }
+    }
+  }
+
+  async function setTaskMessageReaction(
+    agentId: string,
+    taskId: string,
+    messageId: string,
+    emoji: MessageReaction | null,
+  ): Promise<void> {
+    const react = port().setTaskMessageReaction;
+    if (!react || !canMessageActions()) return;
+    await runAction(() => react({ agentId, taskId, messageId, emoji }), "chat.actions.reactionFailed");
   }
 
   /** The messages of a thread: the loaded conversation, else a read of it. */
@@ -771,12 +949,28 @@ export function createAgentTasks(options: AgentTasksOptions) {
     closeTask,
     reopenTask,
     renameTask,
+    canTransfer,
+    transferTask,
+    transferActions: () => {
+      if (!canTransfer()) return undefined;
+      const serverId = options.serverId?.() ?? options.failureReadScope ?? "local";
+      return {
+        serverId,
+        onTransfer: (agentId: string, taskId: string, targetAgentId: string) => {
+          void transferTask(agentId, taskId, targetAgentId, serverId);
+        },
+      };
+    },
     deleteTask,
     canDeleteMessage,
     deleteTaskMessage,
     markTaskRead,
+    markTaskUnread,
+    setTaskMessageReaction,
+    canMessageActions,
     markAllTasksRead,
     taskHasMessage,
+    failureRead,
     unreadCount,
     unreadTotals,
     loadUnread,

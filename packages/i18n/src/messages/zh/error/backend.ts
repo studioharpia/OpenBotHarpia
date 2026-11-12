@@ -2,6 +2,12 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "请提供任务 ID 和目标智能体 ID。",
+  "error.backend.taskTransferFailed": "OpenBot 无法转移任务。请重试。",
+  "error.backend.taskTransferOwnChatOnly": "请从自己的主聊天转移任务，而不是从频道、外部对话或其他任务转移。",
+  "error.backend.threadTransferBusy": "此任务有正在进行或等待处理的工作，暂时无法移动。",
+  "error.backend.threadTransferRoutine": "与例行任务关联的任务无法移至其他智能体。",
+
   "error.backend.eventsUnavailable": "这台主机不支持事件。",
   "error.backend.databaseIntegrity": "OpenBot 数据库未通过完整性校验。",
   "error.backend.webhookRouteLimit": "一台主机最多可有 {limit} 个 Webhook 自动化任务。",
@@ -343,6 +349,8 @@ export const messages = {
   "error.backend.threadMoveRefused": "只有你单独发给该助手的消息才能在新话题中运行。",
   "error.backend.taskTitleRequired": "请给任务起一个简短的标题。",
   "error.backend.taskToolInvalid": "标题不超过 120 个字符，并写明要做什么。",
+  "error.backend.taskRenameInvalid": "请提供任务 ID 和不超过 120 个字符的标题。",
+  "error.backend.taskRenameFailed": "OpenBot 无法重命名任务，请重试。",
   "error.backend.taskOwnChatOnly": "只能在自己的对话中启动任务。频道、消息对话或其他任务都无法启动任务。",
   "error.backend.taskUnfinishedLimit": "该助手已有 {count} 个未完成的任务。请等其中一个结束后再启动新任务。",
   "error.backend.taskOpenLimitReached": "该助手有 {count} 个未关闭的任务。请关闭一个任务，再启动或打开其他任务。",

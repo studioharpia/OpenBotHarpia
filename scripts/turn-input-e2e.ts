@@ -10,12 +10,24 @@
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { AGENT_PROVIDERS } from "@openbot/contracts/ipc";
+import { teamCapabilitiesForProtocol } from "@openbot/contracts/team-protocol/current";
+import {
+  MESSAGE_DELIVERY_CAPABILITY,
+  MESSAGE_DELIVERY_CODECS,
+  MESSAGE_DELIVERY_ROUTE,
+} from "@openbot/contracts/team-protocol/message-delivery-v1";
 import { Effect } from "effect";
 import type { AgentBrowserHost } from "../src/backend/agent/turn-lifecycle";
 import { getString, isRecord } from "../src/backend/protocol";
+import { startProviderLog } from "../src/main/provider-log";
+import { HttpError } from "../src/main/team-api/http-error";
+import type { TeamApiRequestContext } from "../src/main/team-api/request-context";
+import { routeMessageDelivery } from "../src/main/team-api/route-message-delivery";
+import { FAKE_TURN_INPUT_CODEX as FAKE_CODEX } from "./provider-fakes/codex-turn-input";
 
 const OUT = resolve(import.meta.dirname, "../.openbot-build/turn-input-e2e");
 const root = await mkdtemp(join(tmpdir(), "openbot-turn-input-"));
@@ -24,6 +36,7 @@ const home = join(root, "home");
 const logPath = join(root, "protocol.jsonl");
 const controlPath = join(root, "control.json");
 const fakeCodex = join(root, "codex");
+const stopTimingLog = startProviderLog(join(root, "logs"));
 
 // Before the service modules load: the Codex process and the stores read the home folder.
 process.env.HOME = home;
@@ -43,75 +56,6 @@ const { OpenBotDatabase } = await import("../src/backend/openbot-database");
  * A Codex app-server with the methods that the service calls. A turn runs for `turnMs` of
  * `control.json`, and reports a small part of the context window, so no compaction starts.
  */
-const FAKE_CODEX = `#!/usr/bin/env node
-const fs = require("node:fs");
-if (process.argv.includes("--version")) {
-  process.stdout.write("codex-cli 0.160.1\\n");
-  process.exit(0);
-}
-const log = (entry) => fs.appendFileSync(process.env.OPENBOT_FAKE_CODEX_LOG, JSON.stringify(entry) + "\\n");
-const control = () => JSON.parse(fs.readFileSync(process.env.OPENBOT_FAKE_CODEX_CONTROL, "utf8"));
-const config = { config: { mcp_servers: {} }, layers: [{ name: { type: "user", file: "/fake/.codex/config.toml", profile: null }, version: "1", config: { mcp_servers: {} } }] };
-let buffer = "";
-let threads = 0;
-let turns = 0;
-process.stdout.on("error", (error) => {
-  if (error.code === "EPIPE") process.exit(0);
-  throw error;
-});
-const write = (message) => process.stdout.write(JSON.stringify(message) + "\\n");
-const answer = (message) => {
-  const params = message.params || {};
-  switch (message.method) {
-    case "initialize": return write({ id: message.id, result: {} });
-    case "account/read": return write({ id: message.id, result: { account: { type: "chatgpt", email: "codex@example.com" } } });
-    case "account/rateLimits/read": return write({ id: message.id, result: { rateLimits: { limitId: "codex", primary: null, secondary: null }, rateLimitsByLimitId: null } });
-    case "model/list": return write({ id: message.id, result: { data: [{ model: "gpt-5.5", displayName: "GPT-5.5" }] } });
-    case "plugin/list": return write({ id: message.id, result: { marketplaces: [] } });
-    case "config/read": return write({ id: message.id, result: config });
-    case "config/batchWrite": return write({ id: message.id, result: {} });
-    case "thread/start": return write({ id: message.id, result: { thread: { id: "thread-" + (++threads), turns: [] } } });
-    case "thread/resume": return write({ id: message.id, result: { thread: { id: params.threadId, turns: [] } } });
-    case "thread/unsubscribe": return write({ id: message.id, result: { status: "Unsubscribed" } });
-    case "thread/turns/list":
-    case "thread/items/list": return write({ id: message.id, result: { data: [], nextCursor: null } });
-    case "thread/read": return write({ id: message.id, result: { thread: { id: params.threadId, turns: [] } } });
-    case "turn/start": {
-      const turnId = "turn-" + (++turns);
-      write({ id: message.id, result: { turn: { id: turnId, status: "inProgress", items: [] } } });
-      write({ method: "turn/started", params: { threadId: params.threadId, turn: { id: turnId } } });
-      write({ method: "thread/tokenUsage/updated", params: { threadId: params.threadId, turnId, tokenUsage: { total: { totalTokens: 1000 }, last: { totalTokens: 1000 }, modelContextWindow: 100000 } } });
-      setTimeout(() => {
-        const item = { type: "agentMessage", id: "message-" + turnId, text: "Done.", phase: "final_answer" };
-        write({ method: "item/completed", params: { threadId: params.threadId, turnId, item } });
-        write({ method: "turn/completed", params: { threadId: params.threadId, turn: { id: turnId, status: "completed" } } });
-      }, control().turnMs);
-      return;
-    }
-    case "turn/interrupt": {
-      write({ id: message.id, result: {} });
-      return write({ method: "turn/completed", params: { threadId: params.threadId, turn: { id: params.turnId, status: "interrupted" } } });
-    }
-    default:
-      return write({ id: message.id, error: { code: -32601, message: "Method not found: " + message.method } });
-  }
-};
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => {
-  buffer += chunk;
-  let newline = buffer.indexOf("\\n");
-  while (newline >= 0) {
-    const line = buffer.slice(0, newline);
-    buffer = buffer.slice(newline + 1);
-    if (line) {
-      const message = JSON.parse(line);
-      log({ method: message.method ?? null, id: message.id ?? null, params: message.params ?? null });
-      if (message.method && message.id !== undefined) answer(message);
-    }
-    newline = buffer.indexOf("\\n");
-  }
-});
-`;
 
 /** One `turn/start` that OpenBot sent: its provider thread and the text of its input. */
 interface TurnStart {
@@ -127,8 +71,10 @@ interface TurnReport {
 }
 
 const report: {
-  queuedMessages?: { turnStarts: number; mergedTurnCharacters: number; sharedTurnId: boolean; passed: boolean };
+  queuedMessages?: { turnStarts: number; distinctTurns: number; ordered: boolean; passed: boolean };
   messaging?: { turns: TurnReport[]; passed: boolean };
+  atomicSteering?: { checks: string[]; passed: boolean };
+  messageDeliveryHttp?: { checks: string[]; passed: boolean };
   passed: boolean;
   error?: string;
 } = { passed: false };
@@ -172,10 +118,14 @@ function turnStarts(): TurnStart[] {
 }
 
 /** Waits for a state of the service or of the fake Codex. */
-async function waitFor<T>(label: string, read: () => T | null | undefined | false, timeoutMs = 20_000): Promise<T> {
+async function waitFor<T>(
+  label: string,
+  read: () => T | null | undefined | false | Promise<T | null | undefined | false>,
+  timeoutMs = 20_000,
+): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const value = read();
+    const value = await read();
     if (value) return value;
     if (Date.now() > deadline) throw new Error(`Timed out waiting for ${label}.`);
     await new Promise((done) => setTimeout(done, 25));
@@ -186,12 +136,14 @@ await writeFile(fakeCodex, FAKE_CODEX, { mode: 0o755 });
 const database = new OpenBotDatabase(userData);
 const store = new AgentStore(userData, home, database);
 const mailbox = new MailboxStore(userData, store.sharedRoot, store.database);
+let defaultBusyMessageMode: "queue" | "steer" = "queue";
 const agents = new AgentService({
   store,
   mailbox,
   browser,
   preferredProvider: "codex",
   offProviders: AGENT_PROVIDERS.filter((provider) => provider !== "codex"),
+  busyMessageMode: () => defaultBusyMessageMode,
 });
 
 const settled = (deliveryId: string) => {
@@ -202,47 +154,55 @@ const settled = (deliveryId: string) => {
 try {
   await runCauseEffect(agents.initialize());
 
-  // (a) The first turn runs long enough for three more messages to wait behind it.
-  await writeFile(controlPath, JSON.stringify({ turnMs: 1_500 }));
+  // (a) Hold the first turn until the three following messages are visibly queued.
+  await writeFile(controlPath, JSON.stringify({ turnMs: 50 }));
   const agent = await runCauseEffect(
     agents.createAgent({
       name: "Turn input",
       description: "Checks what each turn sends.",
       avatarSeed: "turn-input",
       avatarHue: null,
-      initialMessage: "First message.",
+      initialMessage: "HOLD-STEER First message.",
     }),
   );
   const chatThread = await waitFor("the first turn to start", () => {
     const session = store.activeProviderSession(agent.id)?.externalSessionId;
     return session && turnStarts().some((start) => start.threadId === session) ? session : null;
   });
-  await writeFile(controlPath, JSON.stringify({ turnMs: 50 }));
+  const firstTurn = await waitFor(
+    "the original active turn",
+    async () => (await runCauseEffect(agents.readConversation(agent.id))).activeTurnId,
+  );
   const queued: string[] = [];
   for (const text of ["Second message.", "Third message.", "Fourth message."]) {
     const receipt = await runCauseEffect(agents.sendMessage({ agentId: agent.id, text }));
     const deliveryId = receipt.deliveries[0]?.id;
     assert.ok(deliveryId, `no delivery for ${text}`);
+    assert.equal(mailbox.getDelivery(deliveryId)?.delivery.status, "queued");
     queued.push(deliveryId);
   }
+  assert.equal(turnStarts().filter((start) => start.threadId === chatThread).length, 1);
+  await runCauseEffect(
+    agents.sendMessage({ agentId: agent.id, text: "FINISH-STEER", deliveryMode: "steer", expectedTurnId: firstTurn }),
+  );
   for (const deliveryId of queued) {
     const status = await waitFor("a queued message to end", () => settled(deliveryId));
     assert.equal(status, "completed", mailbox.getDelivery(deliveryId)?.delivery.error ?? status);
   }
   const chatStarts = turnStarts().filter((start) => start.threadId === chatThread);
-  const merged = chatStarts[1]?.text ?? "";
   const turnIds = new Set(queued.map((deliveryId) => mailbox.getDelivery(deliveryId)?.delivery.turnId));
+  const ordered = ["Second message.", "Third message.", "Fourth message."].every((text, index) =>
+    chatStarts[index + 1]?.text.includes(text),
+  );
   report.queuedMessages = {
     turnStarts: chatStarts.length,
-    mergedTurnCharacters: merged.length,
-    sharedTurnId: turnIds.size === 1,
+    distinctTurns: turnIds.size,
+    ordered,
     passed: false,
   };
-  assert.equal(chatStarts.length, 2, "the queued messages did not start one turn");
-  assert.ok(merged.startsWith("This turn starts with 3 messages."), merged);
-  const order = ["Second message.", "Third message.", "Fourth message."].map((text) => merged.indexOf(text));
-  assert.ok(order.every((index, position) => index >= 0 && (position === 0 || index > (order[position - 1] ?? -1))));
-  assert.ok(report.queuedMessages.sharedTurnId, "the queued messages ran in different turns");
+  assert.equal(chatStarts.length, 4, "each queued message must start its own turn after the original");
+  assert.equal(turnIds.size, 3, "the queued messages were merged into the same turn");
+  assert(ordered, "the queued messages did not follow their queue order");
   report.queuedMessages.passed = true;
 
   // (b) Three Discord messages in one conversation, with a new saved fact before the third.
@@ -308,11 +268,266 @@ try {
   );
   assert.ok(messagingStarts[2]?.text.includes("Hotfixes ship on any day."), "the new saved fact is missing");
   report.messaging.passed = true;
+
+  // (c) Explicit per-message intent overrides only this send, in the existing provider session.
+  const checks: string[] = [];
+  report.atomicSteering = { checks, passed: false };
+  const hold = await runCauseEffect(agents.sendMessage({ agentId: agent.id, text: "HOLD-STEER ASK-QUESTION" }));
+  const heldDelivery = hold.deliveries[0]?.id;
+  assert(heldDelivery);
+  const activeTurn = await waitFor("held turn", () => mailbox.getDelivery(heldDelivery)?.delivery.turnId);
+  const sessionBefore = store.activeProviderSession(agent.id)?.externalSessionId;
+  const question = await waitFor("the current turn's question", () =>
+    agents.getRuntimeSnapshot().pendingPrompts.find((prompt) => prompt.turnId === activeTurn),
+  );
+  const inheritedQueue = await runCauseEffect(agents.sendMessage({ agentId: agent.id, text: "Inherit app queue" }));
+  assert.equal(mailbox.getDelivery(inheritedQueue.deliveries[0]?.id ?? "")?.delivery.status, "queued");
+  assert(agents.getRuntimeSnapshot().pendingPrompts.some((prompt) => prompt.requestId === question.requestId));
+  checks.push("The app's default queue neither steers the turn nor resolves its open question.");
+  defaultBusyMessageMode = "steer";
+  await runCauseEffect(agents.updateAgent({ agentId: agent.id, busyMessageMode: "queue" }));
+  const agentQueue = await runCauseEffect(
+    agents.sendMessage({ agentId: agent.id, text: "Agent queue overrides app steer" }),
+  );
+  assert.equal(mailbox.getDelivery(agentQueue.deliveries[0]?.id ?? "")?.delivery.status, "queued");
+  assert(agents.getRuntimeSnapshot().pendingPrompts.some((prompt) => prompt.requestId === question.requestId));
+  checks.push("An agent's queue preference overrides the app's steer preference.");
+  const ordinary = await runCauseEffect(
+    agents.sendMessage({ agentId: agent.id, text: "Explicit queue", deliveryMode: "queue" }),
+  );
+  assert.equal(mailbox.getDelivery(ordinary.deliveries[0]?.id ?? "")?.delivery.status, "queued");
+  checks.push("Explicit queue remains queued while the original turn runs.");
+  assert(agents.getRuntimeSnapshot().pendingPrompts.some((prompt) => prompt.requestId === question.requestId));
+  const stale = await runCauseEffect(
+    agents.sendMessage({
+      agentId: agent.id,
+      text: "Stale intent",
+      deliveryMode: "steer",
+      expectedTurnId: "ended-turn",
+    }),
+  );
+  assert.equal(mailbox.getDelivery(stale.deliveries[0]?.id ?? "")?.delivery.status, "queued");
+  assert(agents.getRuntimeSnapshot().pendingPrompts.some((prompt) => prompt.requestId === question.requestId));
+  checks.push("Explicit queue and a stale steer preserve the current turn's unanswered question.");
+  defaultBusyMessageMode = "queue";
+  await runCauseEffect(agents.updateAgent({ agentId: agent.id, busyMessageMode: "steer" }));
+  const agentSteer = await runCauseEffect(
+    agents.sendMessage({ agentId: agent.id, text: "Agent steer overrides app queue" }),
+  );
+  await waitFor(
+    "configured agent steer",
+    () => mailbox.getDelivery(agentSteer.deliveries[0]?.id ?? "")?.delivery.status === "running",
+  );
+  assert.equal(mailbox.getDelivery(agentSteer.deliveries[0]?.id ?? "")?.delivery.turnId, activeTurn);
+  checks.push("An agent's steer preference overrides the app queue in the same running turn.");
+  const [attachment] = await runCauseEffect(
+    mailbox.prepareImportedAttachments(
+      [],
+      [
+        {
+          name: "context.txt",
+          mimeType: "text/plain",
+          bytes: new TextEncoder().encode("Keep the original project context."),
+        },
+      ],
+    ),
+  );
+  assert(attachment);
+  const steerInput = {
+    agentId: agent.id,
+    text: "Clarification without replacing the task",
+    deliveryMode: "steer" as const,
+    expectedTurnId: activeTurn,
+    clientMessageId: "atomic-retry",
+    replyToMessageId: heldDelivery,
+    attachmentDraftIds: [attachment.id],
+  };
+  const steered = await runCauseEffect(agents.sendMessage(steerInput));
+  const steerId = steered.deliveries[0]?.id;
+  assert(steerId);
+  await waitFor("steer acceptance", () => mailbox.getDelivery(steerId)?.delivery.status === "running");
+  assert.equal(mailbox.getDelivery(steerId)?.delivery.turnId, activeTurn);
+  assert.equal(store.activeProviderSession(agent.id)?.externalSessionId, sessionBefore);
+  assert.equal(mailbox.getDelivery(heldDelivery)?.delivery.status, "running");
+  checks.push("Steer reaches the original turn/session without stopping its request.");
+  const repeated = await runCauseEffect(agents.sendMessage(steerInput));
+  assert.equal(repeated.messageId, steered.messageId);
+  const loggedSteers = () =>
+    readFileSync(logPath, "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+      .filter((row) => row.method === "turn/steer");
+  assert.equal(loggedSteers().filter((row) => row.params.clientUserMessageId === steerId).length, 1);
+  checks.push("Retry with the same client id neither duplicates delivery nor resubmits steer.");
+  const storedSteer = mailbox.getDelivery(steerId);
+  assert.equal(storedSteer?.delivery.replyToMessageId, heldDelivery);
+  assert.equal(storedSteer?.delivery.attachments[0]?.name, "context.txt");
+  assert(loggedSteers().some((row) => JSON.stringify(row.params.input).includes("context.txt")));
+  checks.push("Reply target and attachment remain attached to the steering delivery and provider prompt.");
+  await runCauseEffect(
+    agents.sendMessage({ agentId: agent.id, text: "FINISH-STEER", deliveryMode: "steer", expectedTurnId: activeTurn }),
+  );
+  await waitFor("the original request to finish", () => settled(heldDelivery));
+  for (const receipt of [inheritedQueue, agentQueue, ordinary, stale])
+    await waitFor("queued follow-up", () => settled(receipt.deliveries[0]?.id ?? ""));
+  const ended = await runCauseEffect(agents.readConversation(agent.id));
+  assert(ended.messages.some((message) => message.id === heldDelivery));
+  assert(ended.messages.some((message) => message.id === steerId));
+  checks.push("Original request, clarification and queued follow-ups stay in persisted conversation history.");
+  await runCauseEffect(agents.updateAgent({ agentId: agent.id, busyMessageMode: null }));
+  // Native steering of a side task must not enter the agent's main conversation.
+  const task = await runCauseEffect(
+    agents.startTask({ agentId: agent.id, text: "HOLD-STEER side task", clientMessageId: "task-start" }),
+  );
+  const taskTurn = await waitFor("side task turn", () => agents.readTask(agent.id, task.id).activeTurnId);
+  const taskSession = store.database.activeProviderSession(task.threadId, "codex")?.externalSessionId;
+  const side = await runCauseEffect(
+    agents.sendMessage({
+      agentId: agent.id,
+      taskId: task.id,
+      text: "Side clarification",
+      deliveryMode: "steer",
+      expectedTurnId: taskTurn,
+    }),
+  );
+  const sideId = side.deliveries[0]?.id;
+  assert(sideId);
+  await waitFor("side steer", () => mailbox.getDelivery(sideId)?.delivery.status === "running");
+  assert(agents.readTask(agent.id, task.id).messages.some((message) => message.id === sideId));
+  assert(!(await runCauseEffect(agents.readConversation(agent.id))).messages.some((message) => message.id === sideId));
+  assert.equal(store.database.activeProviderSession(task.threadId, "codex")?.externalSessionId, taskSession);
+  const sideQueue = await runCauseEffect(
+    agents.sendMessage({ agentId: agent.id, taskId: task.id, text: "Queued side demand" }),
+  );
+  assert.equal(mailbox.getDelivery(sideQueue.deliveries[0]?.id ?? "")?.delivery.status, "queued");
+  await runCauseEffect(
+    agents.sendMessage({
+      agentId: agent.id,
+      taskId: task.id,
+      text: "FINISH-STEER",
+      deliveryMode: "steer",
+      expectedTurnId: taskTurn,
+    }),
+  );
+  await waitFor("queued side demand", () => settled(sideQueue.deliveries[0]?.id ?? ""));
+  assert.equal(agents.readTask(agent.id, task.id).threadId, task.threadId);
+  checks.push("Side-task steering and default queue preserve its session and isolate all messages from the main chat.");
+  report.atomicSteering.passed = true;
+  // Local HTTP exercises the real route/service. The authenticated member context is supplied by
+  // this harness; TeamApiServer's session/auth transport remains covered by its existing E2E.
+  const apiChecks: string[] = [];
+  report.messageDeliveryHttp = { checks: apiChecks, passed: false };
+  const codec = MESSAGE_DELIVERY_CODECS.get(MESSAGE_DELIVERY_ROUTE);
+  assert(codec);
+  const api = createServer(async (request, response) => {
+    const context: TeamApiRequestContext = {
+      request,
+      response,
+      method: request.method ?? "GET",
+      url: new URL(request.url ?? "/", "http://localhost"),
+      protocol: 9,
+      capabilities: new Set(request.headers["x-legacy"] ? [] : [MESSAGE_DELIVERY_CAPABILITY]),
+      member: {
+        id: "member-evidence",
+        username: "evidence",
+        email: null,
+        name: "Evidence member",
+        role: "member",
+        createdAt: "2026-01-01T00:00:00Z",
+        disabled: false,
+      },
+      token: "local-fixture",
+      sessionId: "local-fixture",
+      sessionExpiresAt: "2030-01-01T00:00:00Z",
+      agentLevel: () => (request.headers["x-view-only"] ? "view" : "chat"),
+      json: (status, value) => {
+        response.writeHead(status, { "content-type": "application/json" });
+        response.end(JSON.stringify(value));
+        return "handled";
+      },
+      empty: (status) => {
+        response.writeHead(status);
+        response.end();
+        return "handled";
+      },
+    };
+    try {
+      await routeMessageDelivery(context, agents, new Set(request.headers["x-hidden"] ? [agent.id] : []));
+    } catch (error) {
+      context.json(error instanceof HttpError ? error.status : 500, {
+        error: error instanceof Error ? error.message : "Error",
+      });
+    }
+  });
+  await new Promise<void>((done) => api.listen(0, "127.0.0.1", done));
+  try {
+    const address = api.address();
+    assert(address && typeof address === "object");
+    const payload = codec.request({
+      agentId: agent.id,
+      text: "HTTP delivery",
+      attachmentDraftIds: [],
+      deliveryMode: "queue",
+      clientMessageId: "http-idempotency",
+      timezone: "America/Sao_Paulo",
+    });
+    const send = (body = JSON.stringify(payload), headers: Record<string, string> = {}) =>
+      fetch(`http://127.0.0.1:${address.port}${MESSAGE_DELIVERY_ROUTE}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body,
+      });
+    assert(isRecord(payload));
+    const first = await send();
+    assert.equal(first.status, 202);
+    const firstReceipt = await first.json();
+    codec.response(first.status, firstReceipt);
+    const retry = await send();
+    const retriedReceipt = await retry.json();
+    assert.equal(retriedReceipt.messageId, firstReceipt.messageId);
+    assert.deepEqual(
+      retriedReceipt.deliveries.map((delivery: { id: string }) => delivery.id),
+      firstReceipt.deliveries.map((delivery: { id: string }) => delivery.id),
+    );
+    apiChecks.push("Real HTTP send and frozen receipt codec preserve per-member idempotency.");
+    assert.equal((await send(undefined, { "x-view-only": "1" })).status, 403);
+    assert.equal((await send(undefined, { "x-hidden": "1" })).status, 404);
+    assert.equal((await send(undefined, { "x-legacy": "1" })).status, 400);
+    assert.equal((await send(JSON.stringify({ ...payload, timezone: "invalid/timezone" }))).status, 400);
+    apiChecks.push(
+      "View-only member, hidden agent, missing capability and invalid timezone are refused before a new delivery.",
+    );
+    for (const protocol of [1, 7, 8]) {
+      assert(!teamCapabilitiesForProtocol(protocol).includes(MESSAGE_DELIVERY_CAPABILITY));
+      assert(teamCapabilitiesForProtocol(protocol).length <= 128);
+    }
+    assert(teamCapabilitiesForProtocol(9).includes(MESSAGE_DELIVERY_CAPABILITY));
+    apiChecks.push("New capability stays on protocol 9; old capability lists remain within 128 entries.");
+    await waitFor("the HTTP delivery to finish", () => settled(firstReceipt.deliveries[0]?.id ?? ""));
+    await waitFor("persisted timing milestones", () => {
+      try {
+        return readFileSync(join(root, "logs/providers/providers.log"), "utf8").includes(
+          "First new assistant text after steering.",
+        );
+      } catch {
+        return false;
+      }
+    });
+    apiChecks.push(
+      "Host steering/acknowledgement/first-new-text milestones are written to the bounded local provider log.",
+    );
+    report.messageDeliveryHttp.passed = true;
+  } finally {
+    api.closeAllConnections();
+    await new Promise<void>((done) => api.close(() => done()));
+  }
   report.passed = true;
 } catch (error) {
   report.error = error instanceof Error ? (error.stack ?? error.message) : String(error);
   process.exitCode = 1;
 } finally {
+  stopTimingLog();
   await runCauseEffect(agents.stop()).catch(() => {});
   database.close();
   mkdirSync(OUT, { recursive: true });

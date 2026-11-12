@@ -311,18 +311,18 @@ a Claude subscription on a server, read [provider terms](provider-terms.md#claud
 The plan sets the number of active members, owner included: Starter 1, Standard 5 and Pro 10
 (`BILLING_PLANS`). A host with no plan, such as a self-hosted server, takes the users of its owner's
 license (`ownerLicenseForHost`): Starter 1, Team 2 to 10. Only a license that is `active`, `trialing`, or
-`past_due` until the end of its period gives these seats. A host with no plan and no such license has 3
+`past_due` until the end of its period gives these seats. A host with no plan and no such license has 10
 (`DEFAULT_TEAM_MEMBER_LIMIT`). The Worker reads the limit in this order: a `server_member_limits` row,
 a hosted plan, the license, the default. A self-hosted host can keep a plan from before the license; it
 takes the larger of that plan and the license users. When an account has two open licenses, an
 entitled one comes first. When the limit comes from the license, a full server refuses a
-join with `409 license_users_full`. When a license ends, its servers go back to 3; members who are
+join with `409 license_users_full`. When a license ends, its servers go back to 10; members who are
 active stay. Any open license, also an `unpaid` one, refuses a join after its users, so the host list
 shows the lower of the limit and those users. When a license opens or closes, changes its users, or
 starts or stops giving them, the Worker sends `account-servers-changed` to each active member of the
 owner's servers, so their devices read the new limit. A renewal sends nothing. A `past_due` license that
 passes its period end sends it when the lapse sweep reads the license. A server made before
-these limits keeps the old limits of `LEGACY_MEMBER_LIMITS`: Starter 3, Standard 10 and Pro 25.
+these limits keeps the old limits of `LEGACY_MEMBER_LIMITS`: Starter 10 (increased from 3), Standard 10 and Pro 25.
 Migration `0041` sets `hosted_servers.legacy_member_limits` to 1 for each existing row, and the
 Worker writes 0 for a new server. A self-hosted host with a plan has no hosted row, so it also keeps
 the old limits. `getServerEntitlement` returns the
@@ -352,10 +352,11 @@ self-hosted host that has a plan.
 - A lower limit after a plan change, a plan end or a custom limit removes no one. Active members
   keep their seats. A new join or a reactivation waits for a free seat.
 - The host list (`GET /v2/remote/hosts/`) gives `memberLimit` for each host. The desktop, web and
-  mobile member screens show it. They use 3 when an older Worker sends no limit.
+  mobile member screens show it. When an older Worker sends no limit, the account clients preserve
+  its original limit of 3 (`LEGACY_TEAM_MEMBER_LIMIT`); a local host with no account uses 10.
 - After each subscription sync, the Worker sends `account-servers-changed` to each active member,
   so their devices read the host list, and the new limit, again.
-- A host that is not on an account keeps 3 in its own store (`src/main/team-store.ts`). It has no plan.
+- A host that is not on an account keeps 10 in its own store (`src/main/team-store.ts`). It has no plan.
 
 ## Configure the test Worker
 

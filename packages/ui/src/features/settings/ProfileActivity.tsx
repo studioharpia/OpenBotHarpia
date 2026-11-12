@@ -47,13 +47,26 @@ export function useProfileDates() {
  * label. A pointer over a day shows its date and tokens in the chart tooltip. The cells stay in
  * place when a later report arrives, so a reload does not play the entrance again.
  */
-export function ProfileHeatmap(props: { days: ProfileDay[]; label: string }) {
+export function ProfileHeatmap(props: {
+  days: ProfileDay[];
+  label: string;
+  unavailableDates?: ReadonlySet<string> | undefined;
+  /** A complete month in compact aligned rows, in chronological order. */
+  compact?: boolean | undefined;
+  compactRows?: 2 | 3 | undefined;
+}) {
   const { t } = useText();
   const dates = useProfileDates();
   const model = createMemo(() => {
-    const weeks = heatmapWeeks(props.days);
+    const compactRows = props.compactRows ?? 3;
+    const compactColumns = Math.max(1, Math.ceil(props.days.length / compactRows));
+    const slots: Array<ProfileDay | null> = [...props.days];
+    while (slots.length < compactColumns * compactRows) slots.push(null);
+    const weeks = props.compact ? [slots] : heatmapWeeks(props.days);
     const max = Math.max(0, ...props.days.map((day) => day.tokens));
     return {
+      compactColumns,
+      compactRows,
       columns: weeks.map((week) => week.map((day) => (day ? { day, level: heatLevel(day, max) } : null))),
       months: heatmapMonths(weeks).map((month) => ({ column: month.week, label: dates.month(month.date) })),
     };
@@ -69,7 +82,15 @@ export function ProfileHeatmap(props: { days: ProfileDay[]; label: string }) {
   }
 
   return (
-    <div ref={root} class="profile-heatmap" style={{ "--profile-columns": String(model().columns.length) }}>
+    <div
+      ref={root}
+      class="profile-heatmap"
+      data-compact={props.compact ? "" : undefined}
+      style={{
+        "--profile-columns": String(props.compact ? model().compactColumns : model().columns.length),
+        "--profile-compact-rows": String(model().compactRows),
+      }}
+    >
       <div class="profile-heatmap-months" aria-hidden="true">
         <For each={model().months} keyed={(month) => month.column}>
           {(month) => <span style={{ "grid-column": `${month().column + 1} / span 3` }}>{month().label}</span>}
@@ -83,7 +104,7 @@ export function ProfileHeatmap(props: { days: ProfileDay[]; label: string }) {
                 <span
                   class="profile-heat-cell"
                   style={{ "--profile-col": String(columnIndex) }}
-                  data-level={cell()?.level}
+                  data-level={cell() && props.unavailableDates?.has(cell()?.day.date ?? "") ? 0 : cell()?.level}
                   data-empty={cell() ? undefined : ""}
                   data-active={cell() && hover()?.day.date === cell()?.day.date ? "" : undefined}
                   onPointerEnter={(event) => {
@@ -106,7 +127,11 @@ export function ProfileHeatmap(props: { days: ProfileDay[]; label: string }) {
               style={{ left: `${current().x}px`, top: `${current().y}px` }}
             >
               <strong>{dates.long(current().day.date)}</strong>
-              <div>{t("settings.profile.activity.dayTokens", { tokens: usageCompact(current().day.tokens) })}</div>
+              <div>
+                {props.unavailableDates?.has(current().day.date)
+                  ? t("usage.unavailable")
+                  : t("settings.profile.activity.dayTokens", { tokens: usageCompact(current().day.tokens) })}
+              </div>
             </div>
           </Portal>
         )}

@@ -16,9 +16,10 @@ import {
 import { AGENT_FAST_MODE_CAPABILITY } from "@openbot/contracts/team-protocol/agent-fast-mode-v1";
 import { toast } from "@openbot/ui";
 import type { QuestionPromptComposerAnswer } from "@openbot/ui/components/QuestionPromptBubble";
+import type { AgentMessage } from "@openbot/ui/data";
 import type { QuoteRequest } from "@openbot/ui/features/conversation/ComposerEditor";
 import { currentText } from "@openbot/ui/text";
-import { prefersReducedMotion, usesTouchLayout } from "@openbot/ui/utils";
+import { prefersReducedMotion } from "@openbot/ui/utils";
 import { errorReference } from "@openbot/user-errors";
 import {
   createContext,
@@ -45,6 +46,7 @@ import type {
   ComposerDraft,
   ConversationProps,
   ConversationTarget,
+  RightPanelMode,
   SidePanelPane,
 } from "./conversation-types";
 import {
@@ -294,6 +296,8 @@ export function createConversationViewScope(props: ConversationProps) {
   });
   const {
     skillSettingsRequest,
+    rememberPanelPreference,
+    restoreAgentPanel,
     openSkillSettings,
     instructionsSettingsRequest,
     openInstructionsSettings,
@@ -325,6 +329,7 @@ export function createConversationViewScope(props: ConversationProps) {
     attachmentAction,
     attachmentDownloads,
     openSharedFile,
+    revealChatFile,
     openWorkspaceFile,
     openWorkspaceFolder,
     openWorkspaceFolderEntry,
@@ -594,6 +599,7 @@ export function createConversationViewScope(props: ConversationProps) {
    */
   function toggleSidePanel() {
     if (sidePanelOpen()) {
+      rememberPanelPreference("none");
       hideBrowserPanel();
       return;
     }
@@ -847,6 +853,8 @@ export function createConversationViewScope(props: ConversationProps) {
     clearNewMessages,
     messageVirtualizer,
     timelineMessages,
+    timelineMediaRows,
+    timelineMessageIndexById,
     toggleRoutineRun,
     toggleAgentMessage,
     timelineIndexById,
@@ -1163,6 +1171,7 @@ export function createConversationViewScope(props: ConversationProps) {
     reorderPresentedQueue,
     submitComposer,
     steerComposer,
+    queueComposer,
     composerAnswersPrompt,
     sendSelectionInstruction,
     sendCardMessage,
@@ -1203,6 +1212,11 @@ export function createConversationViewScope(props: ConversationProps) {
   });
   const { replyToMessage, addPageText, setPageContext, reactToMessage, copyMessage, messageText, removeAttachment } =
     messageActions;
+  const threadSendToChannel = (message: AgentMessage) => {
+    const target = props.sendToChannel;
+    if (!target || message.streaming || !message.body.trim()) return undefined;
+    return { channels: target.channels, onSend: (channelId: string) => target.onSend(channelId, messageText(message)) };
+  };
   const settings = createSettingsStore({
     props,
     runtimeSettingsAttempts: resources.runtimeSettingsAttempts,
@@ -1964,7 +1978,10 @@ export function createConversationViewScope(props: ConversationProps) {
     },
   );
 
-  function resetPanelsForAgent(agentId: string | undefined, panel: string | undefined): void {
+  function resetPanelsForAgent(
+    agentId: string | undefined,
+    panel: RightPanelMode | undefined,
+  ): RightPanelMode | undefined {
     const previousAgentId = lastPanelAgentId;
     lastPanelAgentId = agentId;
     clearRoutineSettingsRequest();
@@ -1974,12 +1991,20 @@ export function createConversationViewScope(props: ConversationProps) {
       setSidebarFilePreview(null);
       setRightPanels((current) => ({ ...current, [preview.ownerAgentId]: "none" }));
     }
-    if (!previousAgentId || !agentId || (panel !== "settings" && panel !== "file-preview" && panel !== "files")) return;
-    setRightPanels((current) => ({ ...current, [agentId]: "none" }));
+    if (!agentId) return;
+    if (channel) {
+      if (previousAgentId && (panel === "settings" || panel === "file-preview" || panel === "files"))
+        setRightPanels((current) => ({ ...current, [agentId]: "none" }));
+      return;
+    }
+    if (previousAgentId && (panel === "file-preview" || panel === "files")) {
+      setRightPanels((current) => ({ ...current, [agentId]: "none" }));
+      return restoreAgentPanel(agentId, undefined);
+    }
+    return restoreAgentPanel(agentId, panel);
   }
 
-  // One effect, so a settings request that selects the agent opens its panel after the agent change
-  // closes the old one. As two effects, either order was possible.
+  // Explicit settings requests run after navigation restores the preferred pane.
   createEffect(
     () => {
       const agentId = conversationOwnerId(props);
@@ -1990,10 +2015,6 @@ export function createConversationViewScope(props: ConversationProps) {
         request !== null && agentId === request.agentId && !handledSettingsRequests.has(request);
       if (agentId !== lastPanelAgentId) {
         resetPanelsForAgent(agentId, panel);
-        // The user can type to the agent they opened. Edit agent leaves the focus where it is, and a touch
-        // screen does not open its keyboard over the transcript.
-        if (agentId && !channel && !settingsRequested && !usesTouchLayout())
-          setComposerFocusRequest((value) => value + 1);
       }
       if (!request || !settingsRequested) return;
       handledSettingsRequests.add(request);
@@ -2497,6 +2518,7 @@ export function createConversationViewScope(props: ConversationProps) {
     quotedMessageId,
     copyMessage,
     messageText,
+    threadSendToChannel,
     pasteFiles,
     releaseCutAttachments,
     clearSubmittedDraft,
@@ -2543,6 +2565,8 @@ export function createConversationViewScope(props: ConversationProps) {
     markingRead,
     messageVirtualizer,
     timelineMessages,
+    timelineMediaRows,
+    timelineMessageIndexById,
     toggleRoutineRun,
     toggleAgentMessage,
     timelineIndexById,
@@ -2560,6 +2584,7 @@ export function createConversationViewScope(props: ConversationProps) {
     openRoutineSettings,
     openRoutineRunMessage,
     openSharedFile,
+    revealChatFile,
     openSidebarFileExternally,
     downloadSidebarFile,
     downloadMessageImageFile,
@@ -2650,6 +2675,7 @@ export function createConversationViewScope(props: ConversationProps) {
     cancelVoiceRecording,
     submitComposer,
     steerComposer,
+    queueComposer,
     composerAnswersPrompt,
     submitting,
     unreadDividerVisible,

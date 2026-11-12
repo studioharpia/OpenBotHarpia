@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "Ações do template",
+  "composer.templates.hint": "Digite / em qualquer chat para preencher o input com um prompt salvo.",
+  "composer.templates.new": "Novo template",
+  "composer.templates.empty": "Nenhum template criado.",
+  "composer.templates.editor": "Template de prompt",
+  "composer.templates.name": "Nome",
+  "composer.templates.prompt": "Prompt",
+  "composer.templates.storageError": "Não foi possível ler ou salvar os templates neste computador.",
+  "composer.templates.delete": "Excluir template?",
+  "composer.templates.noMatch": "Nenhum template encontrado.",
+  "composer.templates.list": "Templates de prompts",
   "composer.queueEdit.body":
     "Você está editando uma mensagem na fila. Salve ou cancele a edição para permitir a execução.",
   "composer.queueEdit.cancel": "Cancelar edição",
@@ -77,6 +88,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "Mensagem para o agente",
   "composer.placeholder.answer": "Digite sua resposta",
   "composer.add.label": "Adicionar à instrução",
+  "composer.add.queue": "Enfileirar mensagem",
   "composer.add.files": "Anexar arquivos",
   "composer.add.skill": "Usar uma habilidade",
   "composer.upload.cancel": "Cancelar envio",

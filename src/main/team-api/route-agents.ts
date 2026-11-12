@@ -30,6 +30,10 @@ import {
   BROWSER_SECRET_VAULT_CAPABILITY,
   BROWSER_SECRET_VAULT_ROUTES,
 } from "@openbot/contracts/team-protocol/browser-secret-vault-v1";
+import {
+  HOST_TASK_COMPLETIONS_CAPABILITY,
+  HOST_TASK_COMPLETIONS_ROUTE,
+} from "@openbot/contracts/team-protocol/host-task-completions-v1";
 import { V5_AGENT_MODEL } from "@openbot/contracts/team-protocol/v5-adapter";
 import { V6_AGENT_MODEL } from "@openbot/contracts/team-protocol/v6-adapter";
 import { WORKFLOWS_CAPABILITY } from "@openbot/contracts/team-protocol/workflows-v1";
@@ -115,7 +119,13 @@ export async function routeAgents(
     requireAgentLevel(context, agentId, "chat");
   }
 
-  if (method === "GET" && url.pathname === TEAM_API_ROUTES.analytics) {
+  if (
+    method === "GET" &&
+    (url.pathname === TEAM_API_ROUTES.analytics || url.pathname === HOST_TASK_COMPLETIONS_ROUTE)
+  ) {
+    const withCompletions = url.pathname === HOST_TASK_COMPLETIONS_ROUTE;
+    if (withCompletions && !capabilities.has(HOST_TASK_COMPLETIONS_CAPABILITY))
+      throw new HttpError(400, sourceText("error.team.hostAnalyticsUnsupported"));
     if (!capabilities.has("host-analytics"))
       throw new HttpError(400, sourceText("error.team.hostAnalyticsUnsupported"));
     const input = parseHostAnalyticsInput({
@@ -133,7 +143,8 @@ export async function routeAgents(
     )
       throw new HttpError(404, sourceText("error.team.agentNotFound"));
     // The frozen host analytics wire has no skills: only the local Usage page shows them.
-    const { skills: _localOnly, ...report } = agents.getHostAnalytics(input);
+    const { skills: _localOnly, completedTasks, ...legacyReport } = agents.getHostAnalytics(input);
+    const report = withCompletions ? { ...legacyReport, completedTasks } : legacyReport;
     return json(
       200,
       workflows ? report : { ...report, agents: report.agents.filter((row) => row.agentId !== WORKFLOWS_USAGE_ID) },

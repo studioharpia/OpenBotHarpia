@@ -7,6 +7,7 @@ import {
   authErrorResponse,
   bearerToken,
   requestAuthService,
+  requestInviteLinkOptions,
   requestRemoteControlPlane,
   requestTeamInviteEmailDelivery,
 } from "../../../server/request-auth";
@@ -26,7 +27,12 @@ export const Route = createFileRoute("/v1/team-invitations/email")({
             if (!user) return apiError(401, "unauthorized", "The session is invalid.");
             const body = yield* readJsonObject(request);
             yield* sendTeamInviteEmail(
-              { auth, remote: requestRemoteControlPlane(), delivery: requestTeamInviteEmailDelivery },
+              {
+                auth,
+                remote: requestRemoteControlPlane(),
+                delivery: requestTeamInviteEmailDelivery,
+                inviteLinks: requestInviteLinkOptions(),
+              },
               user,
               body,
               requestSourceIp(request),

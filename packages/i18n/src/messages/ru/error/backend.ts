@@ -2,6 +2,14 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "Укажите идентификатор задачи и целевого агента.",
+  "error.backend.taskTransferFailed": "OpenBot не удалось передать задачу. Повторите попытку.",
+  "error.backend.taskTransferOwnChatOnly":
+    "Передавайте задачи из своего основного чата, а не из канала, внешней беседы или другой задачи.",
+  "error.backend.threadTransferBusy":
+    "У задачи есть выполняемая или ожидающая работа, поэтому её пока нельзя переместить.",
+  "error.backend.threadTransferRoutine": "Задачи, связанные с процедурами, нельзя переместить другому агенту.",
+
   "error.backend.eventsUnavailable": "События недоступны на этом хосте.",
   "error.backend.databaseIntegrity": "База данных OpenBot не прошла проверку целостности.",
   "error.backend.webhookRouteLimit": "На хосте может быть не более {limit} регулярных задач с вебхуком.",
@@ -382,6 +390,8 @@ export const messages = {
     "В новой ветке можно запустить только сообщение, которое вы отправили одному этому агенту.",
   "error.backend.taskTitleRequired": "Дайте задаче короткое название.",
   "error.backend.taskToolInvalid": "Дайте задаче название не длиннее 120 символов и описание того, что нужно сделать.",
+  "error.backend.taskRenameInvalid": "Укажите ID задачи и заголовок длиной не более 120 символов.",
+  "error.backend.taskRenameFailed": "OpenBot не удалось переименовать задачу. Попробуйте ещё раз.",
   "error.backend.taskOwnChatOnly":
     "Задачу можно начать только из своего чата. Канал, диалог в мессенджере или другая задача не может её начать.",
   "error.backend.taskUnfinishedLimit":

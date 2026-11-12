@@ -14,7 +14,6 @@ import {
 } from "solid-js";
 import { useText } from "../../text";
 import { CloseIcon, DownloadIcon } from "./ConversationIcons";
-import { justifiedGalleryLayout } from "./image-gallery-layout";
 import {
   BACKDROP_IN,
   BACKDROP_OUT,
@@ -42,12 +41,6 @@ export function isLightboxImage(attachment: AttachmentSummary): boolean {
   return attachment.previewKind === "image" && Boolean(attachment.previewUrl);
 }
 
-const GALLERY_ROW_HEIGHT = 160;
-const GALLERY_MAX_ROW_HEIGHT = 240;
-const GALLERY_GAP = 6;
-/* A panorama or a tall screenshot would otherwise take a whole row or a sliver of one. */
-const GALLERY_MIN_RATIO = 0.5;
-const GALLERY_MAX_RATIO = 3;
 const SWIPE_DISTANCE = 48;
 /** A drag of a zoomed image that moves this far is not a click, so it does not close the viewer. */
 const DRAG_DISTANCE = 4;
@@ -60,7 +53,7 @@ interface Point {
   y: number;
 }
 
-/** Several images of one message, laid out in justified rows. */
+/** Compact images of one message, each keeping its natural aspect ratio. */
 export function ImageGallery(props: {
   images: AttachmentSummary[];
   onOpen: (attachment: AttachmentSummary, origin: HTMLElement) => void;
@@ -72,41 +65,11 @@ export function ImageGallery(props: {
   // tile keeps its size and pixels until the stored copy loads.
   const [ratios, setRatios] = createStore<Record<number, number>>({});
   const [missing, setMissing] = createStore<Record<string, boolean>>({});
-  const [width, setWidth] = createSignal(0);
-  let gallery: HTMLUListElement | undefined;
-  const layout = createMemo(() =>
-    justifiedGalleryLayout(
-      props.images.map((_, index) => ratios[index] ?? 1),
-      {
-        width: width(),
-        rowHeight: GALLERY_ROW_HEIGHT,
-        maxRowHeight: GALLERY_MAX_ROW_HEIGHT,
-        gap: GALLERY_GAP,
-        minPerRow: 2,
-      },
-    ),
-  );
-
-  onSettled(() => {
-    if (!gallery) return;
-    const element = gallery;
-    setWidth(element.clientWidth);
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => setWidth(element.clientWidth));
-    observer.observe(element);
-    return () => observer.disconnect();
-  });
 
   return (
-    <ul
-      ref={(element) => (gallery = element)}
-      class="image-gallery"
-      aria-label={t("chat.image.gallery", { count: props.images.length })}
-      style={{ height: `${layout().height}px` }}
-    >
+    <ul class="image-gallery" aria-label={t("chat.image.gallery", { count: props.images.length })}>
       <For each={props.images} keyed={false}>
         {(image, index) => {
-          const box = () => layout().boxes[index];
           // Once the tile draws an image, a new URL draws over it when it loads, with no spinner.
           const [loaded, setLoaded] = createSignal(false);
           const url = createSteadyImageUrl(() => image().previewUrl);
@@ -117,7 +80,7 @@ export function ImageGallery(props: {
           const measure = ({ naturalHeight, naturalWidth }: HTMLImageElement) => {
             setLoaded(true);
             if (naturalWidth <= 0 || naturalHeight <= 0) return;
-            const ratio = Math.min(GALLERY_MAX_RATIO, Math.max(GALLERY_MIN_RATIO, naturalWidth / naturalHeight));
+            const ratio = naturalWidth / naturalHeight;
             setRatios((state) => {
               state[index] = ratio;
             });
@@ -128,15 +91,7 @@ export function ImageGallery(props: {
             if (element?.complete && element.naturalWidth > 0) measure(element);
           });
           return (
-            <li
-              class="image-gallery-item"
-              style={{
-                left: `${box()?.left ?? 0}px`,
-                top: `${box()?.top ?? 0}px`,
-                width: `${box()?.width ?? 0}px`,
-                height: `${box()?.height ?? 0}px`,
-              }}
-            >
+            <li class="image-gallery-item" style={{ "--image-gallery-ratio": ratios[index] ?? 1 }}>
               <Button
                 variant="ghost"
                 type="button"

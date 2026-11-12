@@ -2,6 +2,28 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/conversation";
 
 export const messages = {
+  "conversation.threads.error.transfer": "De taak kon niet worden verplaatst.",
+
+  "conversation.sidePanel.pane.central": "Agentcentrum",
+  "conversation.central.mainChat": "Hoofdgesprek",
+  "conversation.central.overview": "Overzicht",
+  "conversation.central.currentMonth": "Deze maand",
+  "conversation.central.previousMonth": "Vorige maand",
+  "conversation.central.tokens": "Gebruikte tokens",
+  "conversation.central.finishedTasks": "Voltooide taken",
+  "conversation.central.finishedHint":
+    "Taken tellen één keer mee, op de datum van de eerste succesvolle voltooiing. Inclusief gearchiveerde taken.",
+  "conversation.central.completedTasks": "Voltooid",
+  "conversation.central.inProgressTasks": "In uitvoering",
+  "conversation.central.emptySection": "Geen taken in deze sectie.",
+  "conversation.central.statusRunning": "Bezig",
+  "conversation.central.statusStarting": "Verbinden",
+  "conversation.central.statusReady": "Beschikbaar",
+  "conversation.central.statusUnavailable": "Niet beschikbaar",
+  "conversation.central.activity": "Tokenactiviteit",
+  "conversation.central.archivedTasks": "Gearchiveerd",
+  "conversation.central.newTask": "Nieuwe taak",
+  "conversation.central.taskActions": "Acties voor {title}",
   "conversation.globalSearch.title": "Zoeken in OpenBot",
   "conversation.globalSearch.filter": "Resultaten filteren",
   "conversation.globalSearch.tab.all": "Alles",
@@ -63,6 +85,8 @@ export const messages = {
   "conversation.sidePanel.pane.browser": "Browser",
   "conversation.sidePanel.pane.files": "Bestanden",
   "conversation.threads.new": "Nieuwe thread",
+  "conversation.threads.showSidebar": "Taken in zijbalk tonen",
+  "conversation.threads.showTopbar": "Taken in bovenbalk tonen",
   "conversation.threads.all": "Alle threads",
   "conversation.threads.open": "Open threads",
   "conversation.threads.current": "Thread: {title}",

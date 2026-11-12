@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "Acciones de plantilla",
+  "composer.templates.hint": "Escribe / en un chat para insertar un prompt guardado.",
+  "composer.templates.new": "Nueva plantilla",
+  "composer.templates.empty": "No hay plantillas.",
+  "composer.templates.editor": "Plantilla de prompt",
+  "composer.templates.name": "Nombre",
+  "composer.templates.prompt": "Prompt",
+  "composer.templates.storageError": "No se pudieron leer o guardar las plantillas.",
+  "composer.templates.delete": "¿Eliminar plantilla?",
+  "composer.templates.noMatch": "No hay coincidencias.",
+  "composer.templates.list": "Plantillas de prompts",
   "composer.queueEdit.body": "Estás editando un mensaje en cola. Guarda o cancela la edición para que se ejecute.",
   "composer.queueEdit.cancel": "Cancelar edición",
   "composer.providerWait.offlineTitle": "Sin conexión a internet",
@@ -75,6 +86,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "Enviar mensaje al agente",
   "composer.placeholder.answer": "Escribe tu respuesta",
   "composer.add.label": "Añadir a la instrucción",
+  "composer.add.queue": "Poner mensaje en cola",
   "composer.add.files": "Adjuntar archivos",
   "composer.add.skill": "Usar una habilidad",
   "composer.upload.cancel": "Cancelar carga",

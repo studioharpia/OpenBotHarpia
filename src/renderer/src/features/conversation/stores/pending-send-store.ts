@@ -21,6 +21,8 @@ export interface PendingSend {
   /** The text sent, with mentions expanded. */
   text: string;
   createdAt: string;
+  /** Monotonic time of the user's send, kept only on this client for local measurements. */
+  submittedAt: number;
   state: PendingSendState;
   /** The host's id for the message, once it answered. The pending row stays until that row is drawn. */
   messageId: string | null;
@@ -87,6 +89,7 @@ export function createPendingSendStore() {
     const deliver = next ? deliverers.get(next.clientMessageId) : undefined;
     if (next?.state !== "waiting" || !deliver) return;
     next.state = "sending";
+    const startedAt = performance.now();
     next.error = null;
     publish(key);
     void deliver({ ...next })
@@ -101,6 +104,18 @@ export function createPendingSendStore() {
         // Dismissed while in flight: nothing is left to update.
         if (find(key, next.clientMessageId) !== next) return;
         if ("messageId" in result) {
+          if (performance.getEntriesByName("openbot.message.persisted").length >= 100)
+            performance.clearMeasures("openbot.message.persisted");
+          performance.measure("openbot.message.persisted", {
+            start: next.submittedAt,
+            end: performance.now(),
+            detail: {
+              clientMessageId: next.clientMessageId,
+              messageId: result.messageId,
+              clientQueueMs: startedAt - next.submittedAt,
+              requestMs: performance.now() - startedAt,
+            },
+          });
           deliverers.delete(next.clientMessageId);
           next.state = "sent";
           next.messageId = result.messageId;
@@ -134,6 +149,7 @@ export function createPendingSendStore() {
       starting: false,
       clientMessageId: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
+      submittedAt: performance.now(),
       state: "waiting",
       messageId: null,
       error: null,

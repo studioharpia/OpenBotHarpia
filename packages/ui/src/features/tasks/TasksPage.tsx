@@ -1,6 +1,8 @@
+import { INPUT_LIMITS } from "@openbot/contracts/input-limits";
 import type { AgentTask, DraftAttachment } from "@openbot/contracts/ipc";
 import type { AppTextKey } from "@openbot/i18n";
 import {
+  isAgentTaskActive,
   plainTaskTitle,
   TASKS_CLOSED_SHOWN,
   type TasksSectionId,
@@ -9,6 +11,7 @@ import {
 } from "@openbot/team-client/agent-tasks";
 import {
   ActiveCurrentRow,
+  Archive,
   ArrowLeft,
   ArrowUp,
   Button,
@@ -16,12 +19,17 @@ import {
   Check,
   ChevronDown,
   Combobox,
+  ContextMenu,
   IconButton,
+  Input,
   LoaderCircle,
+  MessageSquare,
   Mic,
   PanelLeft,
+  PencilLine,
   Popover,
   Search,
+  Trash2,
   X,
 } from "@openbot/ui";
 import { createScrollFades } from "@openbot/ui/components/createScrollFades";
@@ -62,7 +70,7 @@ import {
   Show,
   untrack,
 } from "solid-js";
-import { TasksEmptyBoard, TasksEmptyPitch } from "./TasksEmpty";
+import { TasksEmptyPitch } from "./TasksEmpty";
 
 /** The microphone of the Tasks composer. The page shows it; the app records and transcribes. */
 export interface TasksVoice {
@@ -97,6 +105,7 @@ interface TasksPageProps {
   agents: AgentProfile[];
   /** The tasks of all agents, also a start that waits. */
   tasks: readonly AgentTask[];
+  failureRead?: ((task: AgentTask) => boolean) | undefined;
   /** Whether the task lists of all agents loaded. Only then does a page with no task show how tasks work. */
   loaded?: boolean | undefined;
   /** The agent of the next task. */
@@ -130,6 +139,9 @@ interface TasksPageProps {
   /** The task in the side panel. */
   selectedId: string | null;
   onSelect: (taskId: string | null) => void;
+  onArchive: (taskId: string) => void;
+  onRename?: ((taskId: string, title: string) => void) | undefined;
+  onDelete?: ((taskId: string) => void) | undefined;
   /** The conversation of one task, for the side panel. */
   panel: (taskId: string) => JSX.Element;
   /** The width of the side panel that the user chose, in pixels. A narrow page shows it narrower. */
@@ -590,39 +602,128 @@ function TaskTookLine(props: TasksPageProps & { took: TasksTook }) {
   );
 }
 
-/** One task in the list: its mark, title and state, and the face of its agent at the end. */
+/** A task card using the existing task mark, status and agent identity. */
 function TaskRow(props: {
   task: AgentTask;
   agent: AgentProfile | undefined;
   selected: boolean;
+  failureRead: boolean;
   wait: AgentTaskWait;
   onOpen: () => void;
+  onShow: () => void;
+  onArchive: () => void;
+  onRename?: ((title: string) => void) | undefined;
+  onDelete?: (() => void) | undefined;
 }) {
   const { t } = useText();
+  const [renaming, setRenaming] = createSignal(false);
+  const persisted = () => props.task.threadId.length > 0;
+  const busy = () => isAgentTaskActive(props.task);
+  const finishRename = (value: string | null) => {
+    if (!renaming()) return;
+    setRenaming(false);
+    const title = value?.trim();
+    if (title && title !== props.task.title) props.onRename?.(title);
+  };
   const status = () => agentTaskStatus(props.task, t, props.wait);
+  const tone = () => (props.wait ? "attention" : props.failureRead ? undefined : taskTone(props.task));
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      class="tasks-page-row"
-      data-selected={props.selected ? "" : undefined}
-      aria-label={t("conversation.tasks.page.row", {
-        title: props.task.title,
-        agent: props.agent?.name ?? props.task.agentId,
-        status: status(),
-      })}
-      aria-pressed={props.selected ? "true" : "false"}
-      onClick={() => props.onOpen()}
+    <Show
+      when={renaming()}
+      fallback={
+        <ContextMenu.Root>
+          <ContextMenu.Trigger
+            as="button"
+            type="button"
+            class={[buttonVariants({ variant: "ghost" }), "tasks-page-row"]}
+            data-selected={props.selected ? "" : undefined}
+            data-attention={tone() === "attention" ? "waiting" : tone() === "danger" ? "failed" : undefined}
+            aria-label={t("conversation.tasks.page.row", {
+              title: props.task.title,
+              agent: props.agent?.name ?? props.task.agentId,
+              status: status(),
+            })}
+            aria-pressed={props.selected ? "true" : "false"}
+            onClick={() => props.onOpen()}
+          >
+            <span class="tasks-page-card-heading">
+              <Show when={!props.failureRead}>
+                <AgentTaskMark task={props.task} decorative />
+              </Show>
+              <span class="tasks-page-row-title" title={props.task.title}>
+                {props.task.title}
+              </span>
+            </span>
+            <span class="tasks-page-card-footer">
+              <span class="tasks-page-card-agent">
+                <AgentAvatar agent={props.agent} class="tasks-page-avatar" />
+                <span class="tasks-page-card-agent-name">{props.agent?.name ?? props.task.agentId}</span>
+              </span>
+              <span class="tasks-page-status" data-tone={tone()}>
+                {status()}
+              </span>
+            </span>
+          </ContextMenu.Trigger>
+          <ContextMenu.Portal>
+            <ContextMenu.Content class="agent-threads-tab-menu" aria-label={t("conversation.threads.actions")}>
+              <ContextMenu.Item onSelect={props.onShow}>
+                <MessageSquare aria-hidden="true" />
+                <span>{t("common.open")}</span>
+              </ContextMenu.Item>
+              <Show when={props.onRename}>
+                <ContextMenu.Item disabled={!persisted()} onSelectAfterClose={() => setRenaming(true)}>
+                  <PencilLine aria-hidden="true" />
+                  <span>{t("common.rename")}</span>
+                </ContextMenu.Item>
+              </Show>
+              <ContextMenu.Separator />
+              <ContextMenu.Item
+                disabled={!persisted() || busy() || props.task.state === "closed"}
+                onSelect={props.onArchive}
+              >
+                <Archive aria-hidden="true" />
+                <span>{t("conversation.threads.archive")}</span>
+              </ContextMenu.Item>
+              <Show when={props.onDelete}>
+                <ContextMenu.Item
+                  class="ui-action-menu-danger"
+                  disabled={!persisted() || busy()}
+                  onSelect={() => props.onDelete?.()}
+                >
+                  <Trash2 aria-hidden="true" />
+                  <span>{t("common.delete")}</span>
+                </ContextMenu.Item>
+              </Show>
+            </ContextMenu.Content>
+          </ContextMenu.Portal>
+        </ContextMenu.Root>
+      }
     >
-      <AgentTaskMark task={props.task} decorative />
-      <span class="tasks-page-row-title" title={props.task.title}>
-        {props.task.title}
-      </span>
-      <span class="tasks-page-status" data-tone={props.wait ? "attention" : taskTone(props.task)}>
-        {status()}
-      </span>
-      <AgentAvatar agent={props.agent} class="tasks-page-avatar" />
-    </Button>
+      <Input
+        ref={(field: HTMLInputElement) =>
+          requestAnimationFrame(() => {
+            field.focus();
+            field.select();
+          })
+        }
+        size="sm"
+        dir="auto"
+        aria-label={t("conversation.threads.name")}
+        maxlength={INPUT_LIMITS.agentTaskTitle}
+        defaultValue={props.task.title}
+        onKeyDown={(event: KeyboardEvent & { currentTarget: HTMLInputElement }) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            finishRename(event.currentTarget.value);
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            finishRename(null);
+          }
+        }}
+        onBlur={(event: FocusEvent & { currentTarget: HTMLInputElement }) => finishRename(event.currentTarget.value)}
+      />
+    </Show>
   );
 }
 
@@ -635,17 +736,23 @@ const SECTION_TITLE = {
   closed: "conversation.threads.archived",
 } as const satisfies Record<TasksSectionId, AppTextKey>;
 
-/** The tasks by what they need, each section with its heading. The archived tasks are faded. */
+/** The runtime states form the board; moving a card follows its real task state. */
+const BOARD_ORDER: readonly TasksSectionId[] = ["waiting", "working", "needsYou", "closed"];
+
+/** The existing sections as Kanban columns, including empty lanes. */
 function TasksList(props: TasksPageProps) {
   const { t } = useText();
   const ids = createUniqueId();
   const [view, setView] = createStore({ showAllClosed: false });
   const waitOf = (task: AgentTask) => props.waitOf?.(task);
-  const sections = () => taskSections(props.tasks, view.showAllClosed, undefined, (task) => waitOf(task) !== undefined);
+  const sections = () => {
+    const grouped = taskSections(props.tasks, view.showAllClosed, undefined, (task) => waitOf(task) !== undefined);
+    return BOARD_ORDER.flatMap((id) => grouped.filter((section) => section.id === id));
+  };
   return (
-    <For each={sections()} keyed={(section) => section.id}>
-      {(section) => (
-        <Show when={section().tasks.length > 0}>
+    <div class="tasks-page-board">
+      <For each={sections()} keyed={(section) => section.id}>
+        {(section) => (
           <section
             class="tasks-page-section"
             data-closed={section().id === "closed" ? "" : undefined}
@@ -661,10 +768,15 @@ function TasksList(props: TasksPageProps) {
                   <li data-arrived={props.took?.task.id === task().id ? "" : undefined}>
                     <TaskRow
                       task={task()}
+                      failureRead={props.failureRead?.(task()) ?? false}
                       agent={agentOf(props.agents, task().agentId)}
                       selected={props.selectedId === task().id}
                       wait={waitOf(task())}
                       onOpen={() => props.onSelect(props.selectedId === task().id ? null : task().id)}
+                      onShow={() => props.onSelect(task().id)}
+                      onArchive={() => props.onArchive(task().id)}
+                      onRename={props.onRename ? (title) => props.onRename?.(task().id, title) : undefined}
+                      onDelete={props.onDelete ? () => props.onDelete?.(task().id) : undefined}
                     />
                   </li>
                 )}
@@ -689,9 +801,9 @@ function TasksList(props: TasksPageProps) {
               </Button>
             </Show>
           </section>
-        </Show>
-      )}
-    </For>
+        )}
+      </For>
+    </div>
   );
 }
 
@@ -908,9 +1020,6 @@ export function TasksPage(props: TasksPageProps) {
             <Show when={props.took}>{(took) => <TaskTookLine {...props} took={took()} />}</Show>
           </div>
           <TasksList {...props} />
-          <Show when={empty()}>
-            <TasksEmptyBoard agents={props.agents} />
-          </Show>
         </div>
       </div>
       <TasksSidePanel

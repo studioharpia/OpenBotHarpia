@@ -215,6 +215,46 @@
   row-gap: var(--openbot-space-1);
 }
 
+/* Reserve the side time and controls so revealing them on hover keeps the card still. */
+.message-entry-time-beside .message-shell {
+  flex-wrap: nowrap;
+}
+
+.message-side {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--openbot-space-1);
+}
+
+.message-entry-time-beside .message-side > .message-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.message-side > .message-action-row {
+  padding-inline: 0;
+}
+
+.message-entry-user .message-side {
+  order: -1;
+  flex-direction: row-reverse;
+}
+
+.message-entry-time-beside .message-shell > .ui-bubble,
+.message-entry-time-beside .message-stack {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.message-entry-time-beside .message-stack {
+  width: auto;
+  max-width: min(80%, 720px);
+}
+
+.message-entry-time-beside .message-stack > .ui-bubble {
+  max-width: 100%;
+}
+
 /* The face stays at the end of the bubble when the actions go under it. */
 /* Each row scopes its anchor name, so an engine with no anchor-scope keeps the face in the flow. */
 @supports (position-anchor: --message-bubble) and (anchor-scope: --message-bubble) {
@@ -1405,6 +1445,27 @@ button.chat-action-target:active,
   gap: 10px;
 }
 
+/* Separate image messages share a visual row while keeping their own controls and identities. */
+.message-media-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--openbot-space-3);
+  min-width: 0;
+}
+
+.message-media-cell {
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.message-media-cell .message-media-before {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .image-generation-stage {
   position: relative;
   width: min(100%, 420px);
@@ -1413,6 +1474,27 @@ button.chat-action-target:active,
   border-radius: var(--openbot-radius-lg);
   background: var(--openbot-bg-control);
   isolation: isolate;
+}
+
+/* Attached images use the same proportional limits as the compact gallery. Generated-image
+ * progress and failure states keep their existing presentation and controls. */
+.image-generation[data-presentation="attachment"] .image-generation-stage {
+  width: min(
+    100%,
+    calc(var(--openbot-space-8) * 5),
+    calc(var(--openbot-space-8) * 3.5 * (var(--image-generation-ratio)))
+  );
+}
+
+/* A shrink-to-fit run cannot size its own children from a percentage of itself. */
+.message-media-cell .image-generation[data-presentation="attachment"] .image-generation-stage {
+  width: min(calc(var(--openbot-space-8) * 5), calc(var(--openbot-space-8) * 3.5 * var(--image-generation-ratio)));
+  max-width: 100%;
+}
+
+.image-generation[data-presentation="attachment"].image-generation-ready
+  :is(.image-generation-stage, .image-generation-preview) {
+  background: transparent;
 }
 
 .image-generation-canvas,

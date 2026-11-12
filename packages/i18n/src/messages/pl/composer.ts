@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "Działania szablonu",
+  "composer.templates.hint": "Wpisz / na czacie, aby wstawić zapisany prompt.",
+  "composer.templates.new": "Nowy szablon",
+  "composer.templates.empty": "Brak szablonów.",
+  "composer.templates.editor": "Szablon promptu",
+  "composer.templates.name": "Nazwa",
+  "composer.templates.prompt": "Prompt",
+  "composer.templates.storageError": "Nie można odczytać ani zapisać szablonów.",
+  "composer.templates.delete": "Usunąć szablon?",
+  "composer.templates.noMatch": "Brak pasujących szablonów.",
+  "composer.templates.list": "Szablony promptów",
   "composer.queueEdit.body": "Edytujesz wiadomość z kolejki. Zapisz lub anuluj edycję, aby mogła zostać wysłana.",
   "composer.queueEdit.cancel": "Anuluj edycję",
   "composer.providerWait.offlineTitle": "Brak połączenia z internetem",
@@ -75,6 +86,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "Wiadomość do agenta",
   "composer.placeholder.answer": "Wpisz odpowiedź",
   "composer.add.label": "Dodaj do promptu",
+  "composer.add.queue": "Dodaj do kolejki",
   "composer.add.files": "Załącz pliki",
   "composer.add.skill": "Użyj umiejętności",
   "composer.upload.cancel": "Anuluj przesyłanie",

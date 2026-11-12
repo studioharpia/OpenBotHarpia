@@ -44,10 +44,15 @@ import { AGENT_NOTIFICATION_LEVELS_CAPABILITY } from "@openbot/contracts/team-pr
 import { AGENT_PLAN_CARD_CAPABILITY } from "@openbot/contracts/team-protocol/agent-plan-card-v1";
 import { AGENT_SESSION_SETTINGS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-session-settings-v1";
 import { AGENT_TASK_LIMIT_CAPABILITY } from "@openbot/contracts/team-protocol/agent-task-limit-v1";
+import {
+  AGENT_TASK_LIMIT_V2_CAPABILITY,
+  legacyAgentTasksSnapshot,
+} from "@openbot/contracts/team-protocol/agent-task-limit-v2";
 import { AGENT_TASK_UI_BLOCKS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-task-ui-blocks-v1";
 import { AGENT_TASKS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-tasks-v1";
 import { AGENT_THREAD_BRANCHES_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-branches-v1";
 import { AGENT_THREAD_FILES_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-files-v1";
+import { AGENT_THREAD_MESSAGE_ACTIONS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-message-actions-v1";
 import { AGENT_THREAD_PAGES_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-pages-v1";
 import { AGENT_THREAD_READS_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-reads-v1";
 import { AGENT_THREAD_REPLIES_CAPABILITY } from "@openbot/contracts/team-protocol/agent-thread-replies-v1";
@@ -266,6 +271,7 @@ import { routeAgentTasks } from "./team-api/route-agent-tasks";
 import {
   routeAgentThreadBranches,
   routeAgentThreadFiles,
+  routeAgentThreadMessageActions,
   routeAgentThreadPages,
   routeAgentThreadReads,
   routeAgentThreadReplies,
@@ -306,6 +312,7 @@ import { routeMcpSignIn } from "./team-api/route-mcp-sign-in";
 import { routeMcpSignInApp } from "./team-api/route-mcp-sign-in-app";
 import { routeMemoryReview } from "./team-api/route-memory-review";
 import { routeMessageDelete } from "./team-api/route-message-delete";
+import { routeMessageDelivery } from "./team-api/route-message-delivery";
 import { routeModelVisibility } from "./team-api/route-model-visibility";
 import { routeOnePasswordConnector } from "./team-api/route-onepassword-connector";
 import { routePasswordManagers } from "./team-api/route-password-managers";
@@ -1133,8 +1140,10 @@ export class TeamApiServer {
         return;
       if ((await routeSidebarPins(context, this.#options.sidebarPins, hidden)) === "handled") return;
       if ((await routeAgentTasks(context, this.#options.agentTasks, hidden)) === "handled") return;
+      if ((await routeMessageDelivery(context, this.#options.agents, hidden)) === "handled") return;
       if ((await routeAgentThreads(context, this.#options.agentTasks, hidden)) === "handled") return;
       if ((await routeAgentThreadReads(context, this.#options.agentTasks, hidden)) === "handled") return;
+      if ((await routeAgentThreadMessageActions(context, this.#options.agentTasks, hidden)) === "handled") return;
       if ((await routeAgentThreadFiles(context, this.#options.agentTasks, hidden)) === "handled") return;
       if ((await routeAgentThreadReplies(context, this.#options.agentTasks, hidden)) === "handled") return;
       if ((await routeAgentThreadBranches(context, this.#options.agentTasks, hidden)) === "handled") return;
@@ -1585,7 +1594,11 @@ export class TeamApiServer {
                         ...event,
                         snapshot: conversationSnapshotForCapabilities(event.snapshot, connection.capabilities),
                       }
-                    : event,
+                    : event.type === "agent-tasks-changed"
+                      ? connection.capabilities.has(AGENT_TASK_LIMIT_V2_CAPABILITY)
+                        ? { ...event, type: "agent-tasks-changed-v2" }
+                        : { ...event, snapshot: legacyAgentTasksSnapshot(event.snapshot) }
+                      : event,
                   { agentTaskUiBlocks: connection.capabilities.has(AGENT_TASK_UI_BLOCKS_CAPABILITY) },
                 );
       } catch (error) {
@@ -1634,7 +1647,9 @@ export class TeamApiServer {
                       this.hiddenAgentIds(eventProtocol(connection.capabilities), connection.capabilities, member),
                     ),
                   }
-                : optional,
+                : optional.type === "agent-tasks-changed" && connection.capabilities.has(AGENT_TASK_LIMIT_V2_CAPABILITY)
+                  ? { ...optional, type: "agent-tasks-changed-v2" }
+                  : optional,
         );
       } else if (event.type === "conversation" && supportsRuntimeSnapshots) {
         conversationInvalidation ??=
@@ -2404,12 +2419,15 @@ export class TeamApiServer {
           if (capability === AGENT_THREADS_CAPABILITY) return this.#options.agentTasks !== undefined;
           if (capability === AGENT_TASK_UI_BLOCKS_CAPABILITY) return this.#options.agentTasks !== undefined;
           if (capability === AGENT_THREAD_READS_CAPABILITY) return this.#options.agentTasks !== undefined;
+          if (capability === AGENT_THREAD_MESSAGE_ACTIONS_CAPABILITY) return this.#options.agentTasks !== undefined;
           if (capability === AGENT_THREAD_FILES_CAPABILITY) return this.#options.agentTasks !== undefined;
           if (capability === AGENT_THREAD_REPLIES_CAPABILITY) return this.#options.agentTasks !== undefined;
           if (capability === AGENT_THREAD_BRANCHES_CAPABILITY) return this.#options.agentTasks !== undefined;
           if (capability === AGENT_THREAD_PAGES_CAPABILITY) return this.#options.agentTasks !== undefined;
           if (capability === AGENT_HOST_SETTINGS_CAPABILITY) return this.#options.admin?.agentHost !== undefined;
           if (capability === AGENT_BACKUP_MODELS_CAPABILITY) return this.#options.admin?.agentHost !== undefined;
+          if (capability === AGENT_TASK_LIMIT_V2_CAPABILITY)
+            return this.#options.admin?.agentHost !== undefined && this.#options.agentTasks !== undefined;
           if (capability === AGENT_TASK_LIMIT_CAPABILITY) return this.#options.admin?.agentHost !== undefined;
           if (capability === AGENT_NEW_CHAT_CAPABILITY) return this.#options.admin?.agentHost !== undefined;
           if (capability === AGENT_PLAN_CARD_CAPABILITY) return this.#options.admin?.agentHost !== undefined;

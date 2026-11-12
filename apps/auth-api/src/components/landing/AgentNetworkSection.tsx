@@ -1,5 +1,6 @@
 import { ProviderLogo } from "@openbot/brand";
 import { prefersReducedMotion } from "@openbot/ui/utils";
+import { createClientOnlyFn } from "@tanstack/solid-start";
 import { createSignal, For, onSettled } from "solid-js";
 import { LANDING_NETWORK_AGENTS, LANDING_NETWORK_HUB, LANDING_PROVIDERS } from "../../lib/landing-content";
 import { createAgentNetworkEggs } from "./agent-network-eggs";
@@ -20,6 +21,7 @@ import { useLandingText } from "./LandingText";
 
 /** The grown network chooses from this many avatars. The three named agents come after them. */
 const GROWN_AVATARS = 24;
+const loadAvatarEngine = createClientOnlyFn(() => import("@openbot/ui/bloub-avatar"));
 /**
  * The scene starts when this share of the stage is on screen, so the first agents are in view.
  * A stage that is higher than the window counts against the window height.
@@ -344,7 +346,7 @@ export function AgentNetworkSection() {
       })
       .catch(() => {});
     // The avatar engine is too large for the first load of the home page, as in the features section.
-    void import("@openbot/ui/bloub-avatar")
+    void loadAvatarEngine()
       .then(({ AVATAR_HUE_CHOICES, avatarHeadColor, createStaticAvatarSvg }) => {
         if (disposed) return;
         const seeds = [

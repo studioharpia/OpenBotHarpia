@@ -2,6 +2,15 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "Indica l’ID dell’attività e l’ID dell’agente di destinazione.",
+  "error.backend.taskTransferFailed": "OpenBot non ha potuto trasferire l’attività. Riprova.",
+  "error.backend.taskTransferOwnChatOnly":
+    "Trasferisci le attività dalla tua chat principale, non da un canale, una conversazione esterna o un’altra attività.",
+  "error.backend.threadTransferBusy":
+    "Questa attività ha lavoro in corso o in attesa e non può ancora essere spostata.",
+  "error.backend.threadTransferRoutine":
+    "Le attività collegate a routine non possono essere spostate a un altro agente.",
+
   "error.backend.eventsUnavailable": "Gli eventi non sono disponibili su questo host.",
   "error.backend.databaseIntegrity": "Il database di OpenBot non ha superato il controllo di integrità.",
   "error.backend.webhookRouteLimit": "Un host può avere al massimo {limit} routine webhook.",
@@ -396,6 +405,8 @@ export const messages = {
   "error.backend.taskTitleRequired": "Dai all'attività un titolo breve.",
   "error.backend.taskToolInvalid":
     "Dai all'attività un titolo di al massimo 120 caratteri e una descrizione che dica cosa fare.",
+  "error.backend.taskRenameInvalid": "Indica l’ID dell’attività e un titolo di massimo 120 caratteri.",
+  "error.backend.taskRenameFailed": "OpenBot non ha potuto rinominare l’attività. Riprova.",
   "error.backend.taskOwnChatOnly":
     "Avvia un'attività solo dalla tua chat. Un canale, una conversazione di messaggistica o un'altra attività non possono avviarne una.",
   "error.backend.taskUnfinishedLimit":

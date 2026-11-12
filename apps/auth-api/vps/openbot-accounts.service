@@ -1,0 +1,30 @@
+[Unit]
+Description=OpenBot — Serviço de contas próprio
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+WorkingDirectory=/opt/openbot
+StateDirectory=openbot-accounts
+StateDirectoryMode=0700
+# Supply account settings through the service manager; do not create an extra env file.
+# The existing encrypted production loader remains an option when its key is available.
+ExecStart=/usr/local/bin/bun apps/auth-api/src/vps/main.ts
+Environment=NODE_ENV=production
+Environment=OPENBOT_API_HOST=127.0.0.1
+Environment=OPENBOT_API_PORT=3100
+Environment=OPENBOT_AUTH_STATE_DIRECTORY=/var/lib/openbot-accounts
+UMask=0077
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=70
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/openbot-accounts
+
+[Install]
+WantedBy=multi-user.target

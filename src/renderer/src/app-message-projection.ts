@@ -189,6 +189,7 @@ export function toAgentMessages(
 ): AgentMessage[] {
   const result: AgentMessage[] = [];
   const thinkingByTurn = new Map<string, AgentMessage>();
+  const segmentStarts = new Map<string, string>();
   for (const [index, message] of messages.entries()) {
     if ((message.delivery?.status === "queued" || message.delivery?.status === "cancelled") && !message.routine) {
       continue;
@@ -196,6 +197,12 @@ export function toAgentMessages(
     // A new agent's setup message is for the agent only: the chat starts with the agent's welcome.
     if (message.itemType === AGENT_WELCOME_ITEM_TYPE) continue;
     if (message.author !== "assistant" || message.itemType !== "commentary") {
+      if (message.author === "user" && message.turnId) {
+        // A reply to a steer belongs below that message, while retaining the provider turn.
+        if (thinkingByTurn.has(message.turnId) || segmentStarts.has(message.turnId))
+          segmentStarts.set(message.turnId, message.id);
+        thinkingByTurn.delete(message.turnId);
+      }
       result.push(convert(message, index));
       continue;
     }
@@ -215,7 +222,7 @@ export function toAgentMessages(
 
     const text = cleanAgentMessageText(message.text);
     const thinking: AgentMessage = {
-      id: `thinking:${key}`,
+      id: segmentStarts.has(key) ? `thinking:${key}:${segmentStarts.get(key)}` : `thinking:${key}`,
       ...(message.turnId === undefined ? {} : { turnId: message.turnId }),
       author: "agent",
       body: "",

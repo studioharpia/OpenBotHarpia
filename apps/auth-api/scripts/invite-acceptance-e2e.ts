@@ -255,6 +255,92 @@ async function singleUseCapHolds() {
   });
 }
 
+async function tenMembersFitAndRemovalFreesASeat() {
+  const { database, now, advance, plane, invite, createInvite } = await setup();
+  try {
+    const link = await createInvite("member", true);
+    const users: AuthUser[] = [MEMBER];
+    for (const key of ["third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth", "eleventh"]) {
+      const user: AuthUser = { ...MEMBER, id: `user-${key}`, email: `${key}@example.test`, name: key };
+      database
+        .prepare(
+          "INSERT INTO users(id, identity_key, email, name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)",
+        )
+        .run(user.id, `email:${user.email}`, user.email, user.name, now, now);
+      users.push(user);
+    }
+    const active = () =>
+      Number(
+        database
+          .prepare("SELECT COUNT(*) AS count FROM remote_memberships WHERE host_id = ? AND status = 'active'")
+          .get(HOST_ID)?.count,
+      );
+    const limit = (await Effect.runPromise(plane.listHosts(OWNER.id)))[0]?.memberLimit;
+    check("the account directory advertises ten seats including the owner", limit === 10, { limit });
+    for (const user of users.slice(0, 9)) {
+      const joined = await failureCode(plane.acceptInvite(user, link.token));
+      check(`${user.name} joins within the ten-member limit`, joined.code === null, {
+        code: joined.code,
+        active: active(),
+      });
+    }
+    check("the owner and nine invited members are active", active() === 10, { active: active() });
+    const eleventh = users.at(-1);
+    if (!eleventh) throw new Error("The eleventh user is missing.");
+    const before = invite(link.inviteId).useCount;
+    const refused = await failureCode(plane.acceptInvite(eleventh, link.token));
+    check(
+      "an eleventh user is refused without consuming the invitation",
+      refused.code === "member_limit_reached" && active() === 10 && invite(link.inviteId).useCount === before,
+      { code: refused.code, active: active(), useCount: invite(link.inviteId).useCount },
+    );
+    const removed = database
+      .prepare("SELECT membership_id FROM remote_memberships WHERE host_id = ? AND user_id = ?")
+      .get(HOST_ID, MEMBER.id);
+    if (!removed) throw new Error("The member to remove is missing.");
+    const membershipId = String(removed.membership_id);
+    advance(1000);
+    await Effect.runPromise(plane.changeMembership(OWNER.id, { hostId: HOST_ID, membershipId, revoke: true }));
+    const retry = await failureCode(plane.acceptInvite(eleventh, link.token));
+    check("removing a member frees a seat for another invitation acceptance", retry.code === null && active() === 10, {
+      code: retry.code,
+      active: active(),
+    });
+    const full = await failureCode(
+      plane.changeMembership(OWNER.id, { hostId: HOST_ID, membershipId, role: "member", reactivate: true }),
+    );
+    check(
+      "reactivation also refuses an eleventh active member",
+      full.code === "member_limit_reached" && active() === 10,
+      {
+        code: full.code,
+        active: active(),
+      },
+    );
+    const replacement = database
+      .prepare("SELECT membership_id FROM remote_memberships WHERE host_id = ? AND user_id = ?")
+      .get(HOST_ID, eleventh.id);
+    if (!replacement) throw new Error("The replacement membership is missing.");
+    advance(1000);
+    await Effect.runPromise(
+      plane.changeMembership(OWNER.id, {
+        hostId: HOST_ID,
+        membershipId: String(replacement.membership_id),
+        revoke: true,
+      }),
+    );
+    const restored = await failureCode(
+      plane.changeMembership(OWNER.id, { hostId: HOST_ID, membershipId, role: "member", reactivate: true }),
+    );
+    check("reactivation succeeds after a seat is freed", restored.code === null && active() === 10, {
+      code: restored.code,
+      active: active(),
+    });
+  } finally {
+    database.close();
+  }
+}
+
 const scenarios = [
   aNewMemberJoins,
   aMemberAcceptsAgain,
@@ -263,6 +349,7 @@ const scenarios = [
   aRemovedMemberJoinsWithANewInvitation,
   aSingleUseLinkStaysUnusedForAMember,
   singleUseCapHolds,
+  tenMembersFitAndRemovalFreesASeat,
 ];
 for (const scenario of scenarios) {
   try {

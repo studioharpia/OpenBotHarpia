@@ -1,9 +1,8 @@
-import { env } from "cloudflare:workers";
 import { createFileRoute } from "@tanstack/solid-router";
 import { Effect } from "effect";
 import { runApiResponse } from "../../server/effect-runtime";
 import { apiError, json, requestAuthService } from "../../server/request-auth";
-import { requireWorkerBindings } from "../../server/types";
+import { accountRequestBindings } from "../../server/request-context";
 
 export const Route = createFileRoute("/health/ready")({
   server: {
@@ -11,7 +10,7 @@ export const Route = createFileRoute("/health/ready")({
       GET: () =>
         runApiResponse(
           Effect.gen(function* () {
-            const bindings = requireWorkerBindings(env);
+            const bindings = accountRequestBindings();
             yield* Effect.promise(() => bindings.DB.prepare("SELECT 1 AS ready").first());
             if (!requestAuthService().configured) {
               return apiError(503, "email_delivery_not_configured", "Email sign-in delivery is not configured.");

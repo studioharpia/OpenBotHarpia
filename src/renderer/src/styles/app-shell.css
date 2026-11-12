@@ -1880,15 +1880,6 @@ textarea {
   gap: var(--openbot-space-2);
 }
 
-.sidebar-folder-icon {
-  flex: 0 0 auto;
-  color: var(--openbot-text-muted);
-}
-
-.sidebar-folder > header .sidebar-section-toggle:hover .sidebar-folder-icon {
-  color: var(--openbot-text-secondary);
-}
-
 .sidebar-folder-unread {
   min-width: 18px;
   justify-content: center;
@@ -1986,6 +1977,10 @@ textarea {
 
 .sidebar-agent-item + .sidebar-agent-item {
   margin-top: 4px;
+}
+
+.sidebar:not(.sidebar-compact) .sidebar-agent-item + .sidebar-agent-item {
+  margin-top: var(--openbot-space-0-5);
 }
 
 .sidebar-agent-item-dragging {
@@ -3076,14 +3071,27 @@ textarea {
   white-space: nowrap;
 }
 
-/* The reference list extends agent tiles beyond the chat-list inset while the
-   shared row anatomy supplies its 62px row and 46px avatar proportions. */
+/* Keep the expanded agent/channel list dense without resizing pinned tiles or people. */
+.sidebar:not(.sidebar-compact) .agent-row:not(.sidebar-pinned-row):not(.person-row) {
+  --agent-row-avatar-size: var(--openbot-control-md);
+
+  height: calc(var(--openbot-control-md) + var(--openbot-space-4) + var(--openbot-space-0-5));
+  min-height: calc(var(--openbot-control-md) + var(--openbot-space-4) + var(--openbot-space-0-5));
+  padding-block: var(--openbot-space-1);
+}
+
 .sidebar:not(.sidebar-compact) .agent-row {
   width: calc(100% + var(--openbot-space-2));
   margin-inline: calc(var(--openbot-space-1) * -1);
 }
 
 .sidebar:not(.sidebar-compact) .sidebar-section-body .agent-row {
+  width: 100%;
+  margin-inline: 0;
+}
+
+/* Agent and task rows share their wrapper's edges, including outside a section. */
+.sidebar:not(.sidebar-compact) .sidebar-agent-item > .agent-row {
   width: 100%;
   margin-inline: 0;
 }

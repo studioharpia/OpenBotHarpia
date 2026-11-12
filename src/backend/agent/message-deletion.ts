@@ -55,36 +55,48 @@ export class MessageDeletion {
     input: DeleteConversationMessageInput,
     access: MessageDeleteAccess,
   ): Effect.fn.Return<void, MessageDeleteRefused | StoredStateFailure> {
-    const target = yield* storedSync(() => this.#target(input));
-    if (!target) return yield* new MessageDeleteRefused({ reason: "not-found" });
-    const { agentId, threadId, taskId, snapshot, message } = target;
-    if (!access.deleteAny && !sentBy(message, access.memberId))
-      return yield* new MessageDeleteRefused({ reason: "forbidden" });
-    if (this.#busy(snapshot, message)) return yield* new MessageDeleteRefused({ reason: "busy" });
-    const mailbox = yield* this.#mailbox.deleteShownMessage(agentId, message.id);
-    if (mailbox === "busy") return yield* new MessageDeleteRefused({ reason: "busy" });
-    yield* storedSync(() => {
-      // A turn can start while the mailbox step waits, so the write keeps the current active turn.
-      // The read also loads the chat again when main evicted it, so the delete is published.
-      // When the agent moved to another chat during the wait, the stored row of this thread decides.
-      const current = taskId ? this.#tasks.read(agentId, taskId) : this.#conversation.ensureSnapshot(agentId, threadId);
-      const activeTurnId =
-        current.threadId === threadId
-          ? current.activeTurnId
-          : this.#store.database.readConversationPage(agentId, threadId, { type: "latest" }, 1).activeTurnId;
-      const revision = this.#store.database.persistConversationChanges({
-        agentId,
-        threadId,
-        activeTurnId,
-        changedMessages: [],
-        deletedMessageIds: [message.id],
-        eventType: MESSAGE_DELETED_EVENT,
-        detail: { messageId: message.id },
+    const reservedTaskId = input.taskId;
+    if (reservedTaskId) yield* storedSync(() => this.#tasks.beginTaskChange(input.agentId, reservedTaskId));
+    yield* Effect.gen({ self: this }, function* () {
+      const target = yield* storedSync(() => this.#target(input));
+      if (!target) return yield* new MessageDeleteRefused({ reason: "not-found" });
+      const { agentId, threadId, taskId, snapshot, message } = target;
+      if (!access.deleteAny && !sentBy(message, access.memberId))
+        return yield* new MessageDeleteRefused({ reason: "forbidden" });
+      if (this.#busy(snapshot, message)) return yield* new MessageDeleteRefused({ reason: "busy" });
+      const mailbox = yield* this.#mailbox.deleteShownMessage(agentId, message.id);
+      if (mailbox === "busy") return yield* new MessageDeleteRefused({ reason: "busy" });
+      yield* storedSync(() => {
+        // A turn can start while the mailbox step waits, so the write keeps the current active turn.
+        // The read also loads the chat again when main evicted it, so the delete is published.
+        // When the agent moved to another chat during the wait, the stored row of this thread decides.
+        const current = taskId
+          ? this.#tasks.read(agentId, taskId)
+          : this.#conversation.ensureSnapshot(agentId, threadId);
+        const activeTurnId =
+          current.threadId === threadId
+            ? current.activeTurnId
+            : this.#store.database.readConversationPage(agentId, threadId, { type: "latest" }, 1).activeTurnId;
+        const revision = this.#store.database.persistConversationChanges({
+          agentId,
+          threadId,
+          activeTurnId,
+          changedMessages: [],
+          deletedMessageIds: [message.id],
+          eventType: MESSAGE_DELETED_EVENT,
+          detail: { messageId: message.id },
+        });
+        const published = this.#conversation.forgetDeletedMessage(agentId, threadId, message.id, revision);
+        if (published) this.#conversation.publishConversation(published);
+        if (taskId) this.#tasks.changed(agentId);
       });
-      const published = this.#conversation.forgetDeletedMessage(agentId, threadId, message.id, revision);
-      if (published) this.#conversation.publishConversation(published);
-      if (taskId) this.#tasks.changed(agentId);
-    });
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (reservedTaskId) this.#tasks.endTaskChange(reservedTaskId);
+        }),
+      ),
+    );
   }, Effect.uninterruptible);
 
   /** The thread and the shown message that the input names, or null when no shown message has the id. */

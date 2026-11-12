@@ -79,6 +79,7 @@ export function WorkspacePageRail(props: { hidden: boolean }) {
       onSchedule={windowPage.openSchedule}
       onTasks={tasksAvailable() ? windowPage.openTasks : undefined}
       onUsage={windowPage.openUsage}
+      onTemplates={windowPage.openTemplates}
       // An older joined server has no storage routes, so it has no Library.
       onLibrary={serverHasStorage(activeServer()) ? windowPage.openLibrary : undefined}
       onMarketplace={() => setSkillsMarketplaceOpen(true)}

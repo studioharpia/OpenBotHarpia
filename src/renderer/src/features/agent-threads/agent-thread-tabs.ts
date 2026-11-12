@@ -378,9 +378,10 @@ export function createAgentThreadTabs(options: AgentThreadTabsOptions) {
     text: string,
     attachmentDraftIds: string[],
     replyToMessageId: string | null = null,
+    deliveryMode?: "queue" | "steer",
   ): Promise<boolean> {
     if (task(agentId, id)?.state === "closed" && !(await tasks.reopenTask(agentId, id))) return false;
-    return tasks.sendToTask(agentId, id, text, attachmentDraftIds, replyToMessageId);
+    return tasks.sendToTask(agentId, id, text, attachmentDraftIds, replyToMessageId, deliveryMode);
   }
 
   /** The first message of the new thread tab starts the thread, which then takes the place of the tab. */

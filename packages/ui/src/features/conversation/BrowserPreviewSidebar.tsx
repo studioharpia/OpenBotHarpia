@@ -14,6 +14,8 @@ const IDLE_CAPTURE_INTERVAL = 20_000;
 
 interface BrowserPreviewSidebarProps {
   capturePreview?: ((tabId: string) => Promise<BrowserPreview>) | undefined;
+  /** When supplied, the containing dock owns resizing and persistence. */
+  width?: number | undefined;
   readWidth: (fallback: number, min: number, max: number) => number;
   readCustomWidth: () => number;
   saveWidth: (width: number) => void;
@@ -51,7 +53,7 @@ export default function BrowserPreviewSidebar(props: BrowserPreviewSidebarProps)
   createEffect(
     () => panelWidth(),
     (width) => {
-      props.onWidthChange(width);
+      if (props.width === undefined) props.onWidthChange(width);
     },
   );
 
@@ -91,7 +93,7 @@ export default function BrowserPreviewSidebar(props: BrowserPreviewSidebarProps)
         label={t("browser.previews.resize")}
         controls="browser-side-panel"
         direction="right"
-        value={panelWidth()}
+        value={props.width ?? panelWidth()}
         defaultValue={defaultPanelWidth()}
         min={BROWSER_PANEL_MIN}
         max={props.maxWidth}

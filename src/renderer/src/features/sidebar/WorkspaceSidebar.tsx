@@ -1,5 +1,8 @@
 import { type ChatWindowTarget, canAdministerServer } from "@openbot/contracts/ipc";
 import { AGENT_HIDDEN_CAPABILITY } from "@openbot/contracts/team-protocol/current";
+import { taskApproval } from "@openbot/team-client/agent-tasks";
+import { threadLists } from "@openbot/ui/features/conversation/threads/thread-items";
+import { MAIN_THREAD_ID } from "@openbot/ui/features/conversation/threads/thread-types";
 import { Sidebar } from "@openbot/ui/features/sidebar/Sidebar";
 import { SidebarCommunityCard } from "@openbot/ui/features/sidebar/SidebarCommunityCard";
 import { SidebarMachineCard } from "@openbot/ui/features/sidebar/SidebarMachineCard";
@@ -20,6 +23,7 @@ import { useAgentTasks } from "../agent-tasks/agent-tasks-context";
 import { useAgentThreads } from "../agent-threads/agent-threads-context";
 import { useAgentActions } from "../agents/agent-actions";
 import { createAgentActivity } from "../agents/agent-activity";
+import { attentionKey } from "../agents/agent-runtime-snapshot";
 import { useAgents } from "../agents/agents-context";
 import { useChannels } from "../channels/channels-context";
 import { useConversation } from "../conversation/conversation-context";
@@ -109,6 +113,43 @@ export function WorkspaceSidebar(props: { peopleEnabled: boolean }) {
           if (selectAgent(agentId)) agentThreads.startNew(agentId);
         }
       : undefined;
+  // The sidebar shows tasks of inactive agents too, including after reconnecting to a server.
+  const threadRoster = createMemo(
+    () => ({
+      enabled: agentTasks.available(),
+      agentIds: agentList().map((agent) => agent.id),
+      serverState: activeServer()?.state,
+    }),
+    {
+      equals: (before, after) =>
+        before.enabled === after.enabled &&
+        before.serverState === after.serverState &&
+        before.agentIds.join() === after.agentIds.join(),
+    },
+  );
+  createEffect(threadRoster, ({ enabled, agentIds }) => {
+    if (enabled) for (const id of agentIds) void agentTasks.loadTasks(id);
+  });
+  const sidebarThreads = (agentId: string) => {
+    const lists = threadLists({
+      mainUpdatedAt: agentList().find((agent) => agent.id === agentId)?.updatedAt ?? "",
+      tasks: agentTasks.snapshot(agentId)?.tasks ?? [],
+      open: agentThreads.openIds(agentId),
+      draft: agentThreads.hasDraft(agentId),
+      draftTitle: t("conversation.threads.new"),
+      hidden: agentThreads.hidden(),
+      waitsFor: (task) => {
+        if (taskApproval(task, approvals())) return "approval";
+        const event = pendingPrompts()[attentionKey(agentId, task.threadId)];
+        if (event?.type === "prompt") return "question";
+        if (event?.type === "browser-takeover-requested") return "takeover";
+        return undefined;
+      },
+      unread: (task) => agentTasks.unreadCount(task),
+      failureRead: agentTasks.failureRead,
+    });
+    return [...lists.threads, ...lists.tabs.filter((item) => item.kind === "draft")];
+  };
   /** What Back opens: the list of an open settings detail page, or else the previous chat. */
   const backTarget = (): { name: string } | null => {
     const pageBack = chatHistory.pageBack();
@@ -201,7 +242,9 @@ export function WorkspaceSidebar(props: { peopleEnabled: boolean }) {
     },
   );
 
-  const { agentStates: sidebarAgentStates, agentMoods } = createAgentActivity();
+  const { agentStates: sidebarAgentStates, agentMoods } = createAgentActivity({
+    includeTasks: () => layout.threadPlacement() !== "sidebar" || !agentTasks.available(),
+  });
 
   /* A wait in a channel thread goes to the channel instead. Selecting the channel opens the view
    * that answers it. */
@@ -297,7 +340,12 @@ export function WorkspaceSidebar(props: { peopleEnabled: boolean }) {
         onUnpin={unpinSidebarItem}
         onReorderPinned={reorderPinnedSidebarItems}
         onReorderPeople={reorderSidebarPeople}
-        onSelectAgent={selectAgent}
+        onSelectAgent={(agentId) =>
+          selectAgent(
+            agentId,
+            layout.threadPlacement() === "sidebar" && agentTasks.available() ? MAIN_THREAD_ID : undefined,
+          )
+        }
         onSelectPerson={(memberId) => void selectDirectMember(memberId)}
         onPreloadDirectConversation={props.peopleEnabled ? () => void DirectConversation.preload() : undefined}
         onCreateAgent={() => {
@@ -313,6 +361,32 @@ export function WorkspaceSidebar(props: { peopleEnabled: boolean }) {
         onHideAgent={hideAllowed() ? (agentId) => void setAgentHiddenByUser(agentId, true) : undefined}
         onRestoreAgent={hideAllowed() ? (agentId) => void setAgentHiddenByUser(agentId, false) : undefined}
         onNewAgentThread={newAgentThread()}
+        taskTransfer={agentTasks.transferActions()}
+        agentThreads={
+          layout.threadPlacement() === "sidebar" && agentTasks.available()
+            ? {
+                items: sidebarThreads,
+                activeId: agentThreads.activeId,
+                onCloseDraft: agentThreads.close,
+                onArchive: (agentId, threadId) => {
+                  void agentThreads.archive(agentId, threadId);
+                },
+                onRename: agentTasks.editable()
+                  ? (agentId, threadId, title) => {
+                      void agentThreads.rename(agentId, threadId, title);
+                    }
+                  : undefined,
+                onDelete: agentTasks.editable()
+                  ? (agentId, threadId) => {
+                      void agentThreads.remove(agentId, threadId);
+                    }
+                  : undefined,
+                onOpen: (agentId, threadId) => {
+                  selectAgent(agentId, threadId);
+                },
+              }
+            : undefined
+        }
         onOpenAgentWindow={
           platform.landingPreview
             ? undefined
@@ -320,6 +394,11 @@ export function WorkspaceSidebar(props: { peopleEnabled: boolean }) {
         }
         windowAgentIds={windowAgentIds()}
         compact={layout.leftPanelCompact()}
+        unreadOnly={layout.unreadOnly()}
+        onUnreadOnlyChange={layout.setUnreadOnly}
+        agentHasUnread={(agentId) => (agentUnreadReplies()[agentId] ?? 0) > 0}
+        compactAgentRows={layout.compactAgentRows()}
+        onCompactAgentRowsChange={layout.setCompactAgentRows}
         onExpand={layout.expandSidebar}
         onOpenSearch={() => setGlobalSearchVisibility(true)}
         footer={

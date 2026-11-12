@@ -1,3 +1,7 @@
+import { AGENT_TASK_LIMIT_V2_ROUTES } from "@openbot/contracts/team-protocol/agent-task-limit-v2";
+import { AGENT_TASK_TRANSFER_ROUTE } from "@openbot/contracts/team-protocol/agent-task-transfer-v1";
+import { AGENT_THREAD_MESSAGE_ACTIONS_ROUTES } from "@openbot/contracts/team-protocol/agent-thread-message-actions-v1";
+import { MESSAGE_DELIVERY_ROUTE } from "@openbot/contracts/team-protocol/message-delivery-v1";
 import { Effect, Schema } from "effect";
 // Team API requests that the web client and the mobile app send in the same way.
 //
@@ -55,6 +59,7 @@ import {
   isRoutineRun,
   type LocalBrowserSecretResponse,
   type MarkAgentTaskReadInput,
+  type MarkAgentTaskUnreadInput,
   type OpenBotDesktopApi,
   type QueuedMessageReceipt,
   type ReadAgentTaskPageInput,
@@ -68,8 +73,10 @@ import {
   type RoutineRunPlace,
   remoteBrowserSecretResponse,
   type SetAgentMemoryInclusionInput,
+  type SetAgentTaskMessageReactionInput,
   type StartAgentTaskInput,
   type SteerQueuedMessageInput,
+  type TransferAgentTaskInput,
   type UpdateQueuedMessageInput,
 } from "@openbot/contracts/ipc";
 import { guardedDecoder, guardedListDecoder } from "@openbot/contracts/ipc-decoding";
@@ -242,8 +249,17 @@ const decodeTaskReceipt = guardedDecoder(isQueuedMessageReceipt, "task message r
 export const listAgentTasks = Effect.fn("TeamClient.listAgentTasks")(function* (
   request: TeamApiRequest,
   agentId: string,
+  extendedLimit = false,
 ): Effect.fn.Return<AgentTasksSnapshot, TeamRequestError> {
-  return yield* teamCall(() => request("POST", AGENT_TASKS_ROUTES.list, decodeAgentTasks, { agentId }));
+  const route = extendedLimit ? AGENT_TASK_LIMIT_V2_ROUTES.list : AGENT_TASKS_ROUTES.list;
+  return yield* teamCall(() => request("POST", route, decodeAgentTasks, { agentId }));
+});
+
+export const transferAgentTask = Effect.fn("TeamClient.transferAgentTask")(function* (
+  request: TeamApiRequest,
+  input: TransferAgentTaskInput,
+): Effect.fn.Return<void, TeamRequestError> {
+  yield* teamCall(() => request("POST", AGENT_TASK_TRANSFER_ROUTE, ignoreResponse, { ...input }));
 });
 
 export const readAgentTask = Effect.fn("TeamClient.readAgentTask")(function* (
@@ -300,37 +316,52 @@ export const sendAgentTaskMessage = Effect.fn("TeamClient.sendAgentTaskMessage")
     attachmentDraftIds,
     replyToMessageId,
     clientMessageId,
+    deliveryMode,
+    expectedTurnId,
   }: AgentTaskInput & {
     text: string;
     attachmentDraftIds?: string[];
     replyToMessageId?: string;
     clientMessageId?: string;
+    deliveryMode?: "queue" | "steer";
+    expectedTurnId?: string;
   },
 ): Effect.fn.Return<QueuedMessageReceipt, TeamRequestError> {
   return yield* teamCall(() =>
-    replyToMessageId
-      ? request("POST", AGENT_THREAD_REPLIES_ROUTES.send, decodeTaskReceipt, {
+    deliveryMode
+      ? request("POST", MESSAGE_DELIVERY_ROUTE, decodeTaskReceipt, {
           agentId,
           taskId,
           text,
           attachmentDraftIds: attachmentDraftIds ?? [],
-          replyToMessageId,
-          ...(clientMessageId === undefined ? {} : { clientMessageId }),
+          deliveryMode,
+          ...(expectedTurnId ? { expectedTurnId } : {}),
+          ...(replyToMessageId ? { replyToMessageId } : {}),
+          ...(clientMessageId ? { clientMessageId } : {}),
         })
-      : attachmentDraftIds?.length
-        ? request("POST", AGENT_THREAD_FILES_ROUTES.send, decodeTaskReceipt, {
+      : replyToMessageId
+        ? request("POST", AGENT_THREAD_REPLIES_ROUTES.send, decodeTaskReceipt, {
             agentId,
             taskId,
             text,
-            attachmentDraftIds,
+            attachmentDraftIds: attachmentDraftIds ?? [],
+            replyToMessageId,
             ...(clientMessageId === undefined ? {} : { clientMessageId }),
           })
-        : request("POST", AGENT_TASKS_ROUTES.send, decodeTaskReceipt, {
-            agentId,
-            taskId,
-            text,
-            ...(clientMessageId === undefined ? {} : { clientMessageId }),
-          }),
+        : attachmentDraftIds?.length
+          ? request("POST", AGENT_THREAD_FILES_ROUTES.send, decodeTaskReceipt, {
+              agentId,
+              taskId,
+              text,
+              attachmentDraftIds,
+              ...(clientMessageId === undefined ? {} : { clientMessageId }),
+            })
+          : request("POST", AGENT_TASKS_ROUTES.send, decodeTaskReceipt, {
+              agentId,
+              taskId,
+              text,
+              ...(clientMessageId === undefined ? {} : { clientMessageId }),
+            }),
   );
 });
 
@@ -384,6 +415,33 @@ export const markAgentThreadRead = Effect.fn("TeamClient.markAgentThreadRead")(f
 ): Effect.fn.Return<AgentTaskReadState, TeamRequestError> {
   return yield* teamCall(() =>
     request("POST", AGENT_THREAD_READS_ROUTES.mark, decodeThreadReadState, { agentId, taskId, throughMessageId }),
+  );
+});
+
+/** Caller gates these actions with agent-thread-message-actions-v1. */
+export const markAgentThreadUnread = Effect.fn("TeamClient.markAgentThreadUnread")(function* (
+  request: TeamApiRequest,
+  input: MarkAgentTaskUnreadInput,
+) {
+  return yield* teamCall(() =>
+    request("POST", AGENT_THREAD_MESSAGE_ACTIONS_ROUTES.unread, decodeThreadReadState, {
+      agentId: input.agentId,
+      taskId: input.taskId,
+      fromMessageId: input.fromMessageId,
+    }),
+  );
+});
+export const setAgentThreadMessageReaction = Effect.fn("TeamClient.setAgentThreadMessageReaction")(function* (
+  request: TeamApiRequest,
+  input: SetAgentTaskMessageReactionInput,
+) {
+  yield* teamCall(() =>
+    request("POST", AGENT_THREAD_MESSAGE_ACTIONS_ROUTES.reaction, () => undefined, {
+      agentId: input.agentId,
+      taskId: input.taskId,
+      messageId: input.messageId,
+      emoji: input.emoji,
+    }),
   );
 });
 

@@ -208,11 +208,6 @@ export class RemoteTeamDirectory {
       if (transport) {
         if (!server.fingerprint)
           return yield* new RemoteWorkflowError({ cause: new Error(sourceText("error.remote.inviteNeedsConnection")) });
-        // The account service cannot email links for a self-hosted service.
-        if (input.email && selfHostedApiOrigin(transport.controlPlaneUrl))
-          return yield* new RemoteWorkflowError({
-            cause: new Error(sourceText("error.remote.selfHostedInviteNoEmail")),
-          });
         const invite = yield* transport.createInvite(serverId, input);
         const result: InviteSummary = yield* remoteDecode(() => ({
           id: invite.inviteId,

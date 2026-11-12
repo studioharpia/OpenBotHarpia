@@ -69,7 +69,9 @@ export function conversationThreads(input: ConversationThreadsInput): Conversati
             ? "takeover"
             : undefined,
     unread: (task) => tasks.unreadCount(task),
+    failureRead: tasks.failureRead,
   };
+  const transferActions = tasks.transferActions();
   const lists = threadLists({ ...listInput, open: tabs.openIds(agentId), draft: tabs.hasDraft(agentId) });
   const activeId = activeThreadId(lists.tabs, tabs.activeId(agentId));
   const open =
@@ -94,10 +96,16 @@ export function conversationThreads(input: ConversationThreadsInput): Conversati
       conversation: tasks.conversation(task.id),
       olderMessages: olderMessages(task.id),
       approval: sideApproval,
-      onSend: (text, attachmentDraftIds, replyToMessageId) =>
-        tabs.send(agentId, task.id, text, attachmentDraftIds, replyToMessageId),
+      onSend: (text, attachmentDraftIds, replyToMessageId, deliveryMode) =>
+        tabs.send(agentId, task.id, text, attachmentDraftIds, replyToMessageId, deliveryMode),
       onStop: () => tasks.stopTask(agentId, task.id),
-      onRead: (messageId) => tasks.markTaskRead(agentId, task.id, messageId),
+      onRead: (messageId) => tasks.markTaskRead(agentId, task.id, messageId, task),
+      onMarkUnread: tasks.canMessageActions()
+        ? (messageId) => tasks.markTaskUnread(agentId, task.id, messageId)
+        : undefined,
+      onReactMessage: tasks.canMessageActions()
+        ? (messageId, emoji) => tasks.setTaskMessageReaction(agentId, task.id, messageId, emoji)
+        : undefined,
       onRespondApproval: (decision, options) =>
         sideApproval ? input.onRespondApproval(sideApproval, decision, options) : Promise.resolve(false),
       get contextState() {
@@ -135,6 +143,12 @@ export function conversationThreads(input: ConversationThreadsInput): Conversati
   const focus = tabs.messageFocus();
   return {
     header: {
+      taskTransfer: transferActions
+        ? {
+            actions: transferActions,
+            agentId,
+          }
+        : undefined,
       ...lists,
       activeId,
       canStartNew: true,
@@ -166,16 +180,22 @@ export function conversationThreads(input: ConversationThreadsInput): Conversati
     approval,
     acceptsFiles: tasks.filesAccepted(),
     acceptsReplies: tasks.repliable(),
-    onSend: (text, attachmentDraftIds, replyToMessageId) =>
+    onSend: (text, attachmentDraftIds, replyToMessageId, deliveryMode) =>
       open
-        ? tabs.send(agentId, open.id, text, attachmentDraftIds, replyToMessageId)
+        ? tabs.send(agentId, open.id, text, attachmentDraftIds, replyToMessageId, deliveryMode)
         : tabs.sendDraft(agentId, text, attachmentDraftIds),
     onStop: () => {
       if (open) tasks.stopTask(agentId, open.id);
     },
     onRead: (messageId) => {
-      if (open) tasks.markTaskRead(agentId, open.id, messageId);
+      if (open) tasks.markTaskRead(agentId, open.id, messageId, open);
     },
+    onMarkUnread:
+      open && tasks.canMessageActions() ? (messageId) => tasks.markTaskUnread(agentId, open.id, messageId) : undefined,
+    onReactMessage:
+      open && tasks.canMessageActions()
+        ? (messageId, emoji) => tasks.setTaskMessageReaction(agentId, open.id, messageId, emoji)
+        : undefined,
     onRespondApproval: (decision, options) =>
       approval ? input.onRespondApproval(approval, decision, options) : Promise.resolve(false),
     get contextState() {

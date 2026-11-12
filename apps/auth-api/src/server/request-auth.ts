@@ -1,4 +1,3 @@
-import { env, waitUntil } from "cloudflare:workers";
 import { HOSTING_DEVELOPER_KEY_HEADER } from "@openbot/contracts/hosted-servers";
 import { isDynamicRecord, isString } from "@openbot/contracts/runtime-values";
 import { Effect } from "effect";
@@ -44,9 +43,10 @@ import {
   RemoteControlPlaneError,
   verifyRemoteServiceSignature,
 } from "./remote-control-plane";
+import { accountRequestBindings, accountRequestWaitUntil } from "./request-context";
 import { SkillMarketplace, SkillMarketplaceError } from "./skill-marketplace";
 import { SlackAppError, SlackAppService } from "./slack-app";
-import { requireWorkerBindings, type TeamInviteEmailDelivery, type WorkerBindings } from "./types";
+import type { TeamInviteEmailDelivery, WorkerBindings } from "./types";
 
 function accountAnalytics(bindings: WorkerBindings): AccountAnalytics {
   return createAccountAnalytics({
@@ -59,12 +59,12 @@ function accountAnalytics(bindings: WorkerBindings): AccountAnalytics {
 }
 
 export function requestAccountAttribution(): AccountAttribution {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   return new AccountAttribution({ database: bindings.DB, analytics: accountAnalytics(bindings) });
 }
 
 export function requestAuthService(): AuthService {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   const exposeDevelopmentCode = bindings.AUTH_EXPOSE_DEVELOPMENT_CODE === "true";
   const analytics = accountAnalytics(bindings);
   return new AuthService({
@@ -84,7 +84,7 @@ export function requestAuthService(): AuthService {
 }
 
 export function requestCompanySignIn(): CompanySignInService {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   const remote = new RemoteControlPlane(bindings, { schedule });
   return new CompanySignInService(bindings, {
     // The revocation is already written and the cron redelivers it, so the answer does not wait.
@@ -101,35 +101,35 @@ export function companySignInErrorResponse(error: unknown): Response {
 }
 
 export function requestAvatarBucket(): R2Bucket {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   return bindings.AVATARS;
 }
 
 export function requestSkillMarketplace(): SkillMarketplace {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   return new SkillMarketplace(bindings);
 }
 
 export function requestAgentMarketplace(): AgentMarketplace {
-  return new AgentMarketplace(requireWorkerBindings(env));
+  return new AgentMarketplace(accountRequestBindings());
 }
 
 export function requestAgentTemplates(): AgentTemplates {
-  return new AgentTemplates(requireWorkerBindings(env));
+  return new AgentTemplates(accountRequestBindings());
 }
 
 /** The sites that a signed-in `/v1/sites` request can see and change. See `resolveHostedSiteScope`. */
 export function requestHostedSiteScope(request: Request, userId: string) {
-  return resolveHostedSiteScope(requireWorkerBindings(env).DB, userId, request);
+  return resolveHostedSiteScope(accountRequestBindings().DB, userId, request);
 }
 
 /** Moves the account's sites from before a self-hosted server registered into it. See `adoptUnlinkedHostedSites`. */
 export function requestAdoptUnlinkedHostedSites(userId: string, serverId: string) {
-  return adoptUnlinkedHostedSites(requireWorkerBindings(env).DB, userId, serverId, Date.now());
+  return adoptUnlinkedHostedSites(accountRequestBindings().DB, userId, serverId, Date.now());
 }
 
 export function requestHostedSiteService(): HostedSiteService {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   return new HostedSiteService(
     bindings.DB,
     bindings.SITES,
@@ -150,7 +150,7 @@ export function billingErrorResponse(error: unknown): Response {
 }
 
 export function requireSitePublishingEnabled(): void {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   if (bindings.SITE_PUBLISH_ENABLED !== "true") {
     throw new HostedSiteInputError(409, "publishing_disabled", "Site publishing is temporarily disabled.");
   }
@@ -175,7 +175,7 @@ export function hostedSiteErrorResponse(error: unknown): Response {
 let githubInstallationTokens: { key: string; service: GitHubInstallationTokens } | null = null;
 
 export function requestGitHubInstallationTokens(): GitHubInstallationTokens {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   const clientId = bindings.GITHUB_APP_CLIENT_ID?.trim();
   const privateKey = bindings.GITHUB_APP_PRIVATE_KEY?.trim();
   if (!clientId || !privateKey) {
@@ -193,7 +193,7 @@ export function requestGitHubInstallationTokens(): GitHubInstallationTokens {
 
 export const enforceGitHubTokenRateLimit = Effect.fn("GitHub.enforceTokenRateLimit")(function* (sourceIp: string) {
   const result = yield* Effect.tryPromise({
-    try: () => requireWorkerBindings(env).GITHUB_TOKEN_RATE_LIMITER.limit({ key: `ip:${sourceIp}` }),
+    try: () => accountRequestBindings().GITHUB_TOKEN_RATE_LIMITER.limit({ key: `ip:${sourceIp}` }),
     catch: () =>
       new GitHubInstallationTokensError(503, "github_app_unavailable", "The OpenBot GitHub App is unavailable."),
   });
@@ -212,7 +212,7 @@ export const enforceGitHubTokenRateLimit = Effect.fn("GitHub.enforceTokenRateLim
  * that it counted, for `uncountFeedback`.
  */
 export const enforceFeedbackRateLimit = Effect.fn("GitHub.enforceFeedbackRateLimit")(function* (userId: string) {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   const limiter = bindings.FEEDBACK_RATE_LIMITER;
   const unavailable = () =>
     new GitHubInstallationTokensError(503, "feedback_unavailable", "Feedback is not available.");
@@ -245,7 +245,7 @@ export const enforceFeedbackRateLimit = Effect.fn("GitHub.enforceFeedbackRateLim
  * limit. A failure here keeps the count: the error of the send goes to the user.
  */
 export const uncountFeedback = Effect.fn("GitHub.uncountFeedback")(function* (userId: string, day: string) {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   yield* Effect.tryPromise(() => bindings.DB.prepare(UNCOUNT_FEEDBACK).bind(userId, day).run()).pipe(Effect.ignore);
 });
 
@@ -276,7 +276,7 @@ export function requestApnsRelay(): {
   /** A host sends one notification for each event that waits for a member, under a separate limit. */
   allowNotification(hostId: string): Effect.Effect<boolean, AuthOperationError>;
 } | null {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   const { APNS_PRIVATE_KEY, APNS_KEY_ID, APNS_TEAM_ID, APNS_TOPIC, APNS_ORIGIN, LIVE_ACTIVITY_RATE_LIMITER } = bindings;
   if (!APNS_PRIVATE_KEY || !APNS_KEY_ID || !APNS_TEAM_ID || !APNS_TOPIC || !LIVE_ACTIVITY_RATE_LIMITER) return null;
   const origin = developmentApnsOrigin(APNS_ORIGIN);
@@ -304,7 +304,7 @@ export function requestFcmRelay(): {
   sender: FcmRelaySender;
   allowNotification(hostId: string): Effect.Effect<boolean, AuthOperationError>;
 } | null {
-  const { FCM_SERVICE_ACCOUNT, LIVE_ACTIVITY_RATE_LIMITER } = requireWorkerBindings(env);
+  const { FCM_SERVICE_ACCOUNT, LIVE_ACTIVITY_RATE_LIMITER } = accountRequestBindings();
   if (!FCM_SERVICE_ACCOUNT || !LIVE_ACTIVITY_RATE_LIMITER) return null;
   const sender = sharedFcmSender(FCM_SERVICE_ACCOUNT);
   if (!sender) return null;
@@ -326,11 +326,11 @@ function developmentApnsOrigin(value: string | undefined): string | undefined {
 }
 
 export function enforceMarketplaceMutationRateLimit(kind: MarketplaceMutationKind, principal: string) {
-  return enforceMarketplaceMutation(requireWorkerBindings(env), kind, principal);
+  return enforceMarketplaceMutation(accountRequestBindings(), kind, principal);
 }
 
 export function enforceHostedSiteReportRateLimit(sourceIp: string) {
-  return enforceReportRateLimit(requireWorkerBindings(env), sourceIp);
+  return enforceReportRateLimit(accountRequestBindings(), sourceIp);
 }
 
 export function marketplaceErrorResponse(error: unknown): Response {
@@ -356,20 +356,20 @@ export function skillErrorResponse(error: unknown): Response {
 }
 
 export const requireSkillsAdmin = Effect.fn("Auth.requireSkillsAdmin")(function* (request: Request) {
-  return yield* adminTokenMatches(requireWorkerBindings(env).SKILLS_ADMIN_TOKEN, bearerToken(request));
+  return yield* adminTokenMatches(accountRequestBindings().SKILLS_ADMIN_TOKEN, bearerToken(request));
 });
 
 export const requireOperationsAdmin = Effect.fn("Auth.requireOperationsAdmin")(function* (request: Request) {
-  return yield* adminTokenMatches(requireWorkerBindings(env).SITE_OPERATIONS_ADMIN_TOKEN, bearerToken(request));
+  return yield* adminTokenMatches(accountRequestBindings().SITE_OPERATIONS_ADMIN_TOKEN, bearerToken(request));
 });
 
 export const requireServerClaimsAdmin = Effect.fn("Auth.requireServerClaimsAdmin")(function* (request: Request) {
-  return yield* adminTokenMatches(requireWorkerBindings(env).SERVER_CLAIMS_ADMIN_TOKEN, bearerToken(request));
+  return yield* adminTokenMatches(accountRequestBindings().SERVER_CLAIMS_ADMIN_TOKEN, bearerToken(request));
 });
 
 /** The limits and delivery of the site's contact form. */
 export function requestContactMessageServices(): ContactMessageServices {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   return {
     repository: new D1AuthRepository(bindings.DB),
     now: () => Date.now(),
@@ -377,13 +377,17 @@ export function requestContactMessageServices(): ContactMessageServices {
   };
 }
 
+export function requestInviteLinkOptions() {
+  return { selfHostedApiOrigin: accountRequestBindings().ACCOUNT_INVITE_ORIGIN };
+}
+
 export function requestTeamInviteEmailDelivery(): TeamInviteEmailDelivery | null {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   return createTeamInviteEmailDelivery(bindings, accountAnalytics(bindings));
 }
 
 export function requestRemoteControlPlane(): RemoteControlPlane {
-  return new RemoteControlPlane(requireWorkerBindings(env), { schedule });
+  return new RemoteControlPlane(accountRequestBindings(), { schedule });
 }
 
 /** Pass the request when the call checks who can create servers, so its developer key counts. */
@@ -392,7 +396,7 @@ export function requestHostedServerService(request?: Request): HostedServerServi
 }
 
 function requestHostedBilling(developerKey: string | null = null) {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   const remote = new RemoteControlPlane(bindings, { schedule });
   return createHostedBilling(bindings, {
     removeHost: (ownerUserId, hostId) => remote.deleteHost(ownerUserId, hostId),
@@ -411,7 +415,7 @@ export function hostedServerErrorResponse(error: unknown): Response {
 }
 
 export function verifyRemoteServiceRequest(request: Request, body: string) {
-  const secret = requireWorkerBindings(env).REMOTE_AUTH_WEBHOOK_SECRET;
+  const secret = accountRequestBindings().REMOTE_AUTH_WEBHOOK_SECRET;
   if (!secret) return Effect.succeed(false);
   return verifyRemoteServiceSignature(
     secret,
@@ -433,7 +437,7 @@ export function githubRouteErrorResponse(error: unknown): Response {
 }
 
 export function requestSlackApp(): SlackAppService {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   // The events are already in D1 and the cron redelivers them, so the answer does not wait.
   return new SlackAppService(bindings, {
     flushAuthEvents: () => Effect.sync(() => schedule(deliverPendingRemoteAuthEvents(bindings, Date.now()))),
@@ -446,7 +450,7 @@ export function slackAppErrorResponse(error: unknown): Response {
 }
 
 export function requestDiscordApp(): DiscordAppService {
-  const bindings = requireWorkerBindings(env);
+  const bindings = accountRequestBindings();
   // The events are already in D1 and the cron redelivers them, so the answer does not wait.
   return new DiscordAppService(bindings, {
     flushAuthEvents: () => Effect.sync(() => schedule(deliverPendingRemoteAuthEvents(bindings, Date.now()))),
@@ -516,5 +520,5 @@ function errorType(error: unknown): string {
 
 /** Starts background work in the active Worker invocation. */
 export function schedule<E>(work: Effect.Effect<void, E>): void {
-  waitUntil(runApiEffect(work));
+  accountRequestWaitUntil(runApiEffect(work));
 }

@@ -1,0 +1,4 @@
+{
+  "type": "agent-tasks-changed-v2",
+  "snapshot": { "agentId": "agent-fixture", "tasks": [], "limit": 10 }
+}

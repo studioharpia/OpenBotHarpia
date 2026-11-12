@@ -1,0 +1,73 @@
+name: Pacote HARPIA para teste
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harpia-package-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: macOS ${{ matrix.arch }}
+    if: github.repository == 'studioharpia/OpenBotHarpia'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            os: macos-15
+            app_dir: mac-arm64
+          - arch: x64
+            os: macos-15-intel
+            app_dir: mac
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Obter o código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Preparar Bun e dependências
+        uses: ./.github/actions/setup-bun
+
+      - name: Preparar runtimes fixados
+        run: |
+          bun run voice:prepare-runtime
+          bun run prepare:remote-desktop-runtime
+          bun run verify:remote-desktop-runtime
+          bun run prepare:cua-driver
+
+      - name: Compilar a distribuição HARPIA
+        run: bun run build
+
+      - name: Empacotar aplicativo de teste sem notarização
+        run: |
+          bun x electron-builder --mac dir --${{ matrix.arch }} --publish never \
+            --config.mac.identity=- --config.mac.notarize=false
+          codesign --verify --deep --strict 'dist/${{ matrix.app_dir }}/OpenBot.app'
+
+      - name: Registrar versão e arquivar preservando o bundle
+        shell: bash
+        run: |
+          mkdir -p harpia-package
+          version="$(bun -p 'require("./package.json").version')"
+          artifact="OpenBot-HARPIA-${version}-${GITHUB_SHA:0:12}-${{ matrix.arch }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent 'dist/${{ matrix.app_dir }}/OpenBot.app' "harpia-package/$artifact"
+          shasum -a 256 "harpia-package/$artifact" > harpia-package/SHA256SUMS.txt
+          printf 'Commit: %s\nVersão: %s\nArquitetura: %s\nNotarização: ausente; pacote de teste, sem atualização automática.\n' \
+            "$GITHUB_SHA" "$version" '${{ matrix.arch }}' > harpia-package/LEIA-ME.txt
+
+      - name: Guardar pacote para validação
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: OpenBot-HARPIA-macos-${{ matrix.arch }}-${{ github.sha }}
+          path: harpia-package/
+          compression-level: 0
+          retention-days: 14

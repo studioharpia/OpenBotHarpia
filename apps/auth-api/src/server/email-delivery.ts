@@ -11,6 +11,7 @@ import {
   prepareTeamInvite,
   prepareWelcomeEmail,
   RATE_LIMITED_DELIVERY_ERROR,
+  type SmtpConnector,
   type SmtpEmailConfig,
   type SmtpFailure,
   sendPrivateEmail,
@@ -30,10 +31,12 @@ export class EmailDeliveryError extends Schema.TaggedError<EmailDeliveryError>()
 
 export type EmailDeliveryBindings = Pick<
   WorkerBindings,
+  | "ACCOUNT_INVITE_ORIGIN"
   | "EMAIL_SMTP_HOST"
   | "EMAIL_SMTP_PORT"
   | "EMAIL_SMTP_USERNAME"
   | "EMAIL_SMTP_PASSWORD"
+  | "EMAIL_SMTP_CONNECTOR"
   | "EMAIL_FROM"
   | "EMAIL_LICENSE_FROM"
   | "EMAIL_RELAY"
@@ -45,6 +48,7 @@ export type EmailDeliveryBindings = Pick<
 /** The SMTP mailbox, and the Cloudflare Email Service binding that sends when the mailbox cannot. */
 interface EmailSenders {
   smtp: SmtpEmailConfig;
+  connector?: SmtpConnector;
   fallback: SendEmail | null;
 }
 
@@ -86,7 +90,17 @@ export function createTeamInviteEmailDelivery(
   analytics: AccountAnalytics,
 ): TeamInviteEmailDelivery | null {
   const senders = readEmailSenders(bindings);
-  return senders ? { send: (message) => deliver(analytics, "team_invite", senders, prepareTeamInvite(message)) } : null;
+  return senders
+    ? {
+        send: (message) =>
+          deliver(
+            analytics,
+            "team_invite",
+            senders,
+            prepareTeamInvite(message, { selfHostedApiOrigin: bindings.ACCOUNT_INVITE_ORIGIN }),
+          ),
+      }
+    : null;
 }
 
 export function createContactMessageDelivery(
@@ -147,7 +161,9 @@ const deliver = Effect.fn("EmailDelivery.deliver")(function* (
   }
   const message = prepared.success;
   const startedAt = Date.now();
-  const smtp = yield* Effect.result(tracked(analytics, "email_sent", kind, sendPrivateEmail(senders.smtp, message)));
+  const smtp = yield* Effect.result(
+    tracked(analytics, "email_sent", kind, sendPrivateEmail(senders.smtp, message, senders.connector)),
+  );
   if (Result.isSuccess(smtp)) return;
   if (!senders.fallback || !canFallBack(smtp.failure.message)) return yield* smtp.failure;
   const remainingMs = EMAIL_CODE_DELIVERY_BUDGET_MS - (Date.now() - startedAt);
@@ -254,7 +270,7 @@ function sendResult(exit: Exit.Exit<void, { message: string }>): EmailResult {
 
 function readEmailSenders(bindings: EmailDeliveryBindings): EmailSenders | null {
   const smtp = readSmtpConfig(bindings);
-  return smtp ? { smtp, fallback: bindings.EMAIL_FALLBACK ?? null } : null;
+  return smtp ? { smtp, connector: bindings.EMAIL_SMTP_CONNECTOR, fallback: bindings.EMAIL_FALLBACK ?? null } : null;
 }
 
 function readSmtpConfig(bindings: EmailDeliveryBindings): SmtpEmailConfig | null {

@@ -1,5 +1,5 @@
 import { INPUT_LIMITS } from "@openbot/contracts/input-limits";
-import { agentThreadTitle } from "@openbot/contracts/ipc";
+import { agentThreadTitle, isMessageReaction } from "@openbot/contracts/ipc";
 import { isString } from "@openbot/contracts/runtime-values";
 import {
   AGENT_THREAD_BRANCHES_CAPABILITY,
@@ -10,6 +10,10 @@ import {
   AGENT_THREAD_FILES_CAPABILITY,
   AGENT_THREAD_FILES_ROUTES,
 } from "@openbot/contracts/team-protocol/agent-thread-files-v1";
+import {
+  AGENT_THREAD_MESSAGE_ACTIONS_CAPABILITY,
+  AGENT_THREAD_MESSAGE_ACTIONS_ROUTES,
+} from "@openbot/contracts/team-protocol/agent-thread-message-actions-v1";
 import {
   AGENT_THREAD_PAGES_CAPABILITY,
   AGENT_THREAD_PAGES_ROUTES,
@@ -252,4 +256,39 @@ export async function routeAgentThreadPages(
     if (Buffer.byteLength(JSON.stringify(answer)) <= WEBRTC_FRAME_BODY_BUDGET) return json(200, answer);
     if (limit <= 1) throw new HttpError(413, sourceText("error.team.conversationPageTooLarge"));
   }
+}
+
+/** Additive actions: the old read route remains monotonic. */
+export async function routeAgentThreadMessageActions(
+  context: TeamApiRequestContext,
+  tasks: TeamApiAgentTasks | undefined,
+  hiddenAgentIds: ReadonlySet<string>,
+): Promise<RouteOutcome> {
+  const { method, url, capabilities, request, member, json } = context;
+  if (method !== "POST" || !Object.values(AGENT_THREAD_MESSAGE_ACTIONS_ROUTES).some((path) => path === url.pathname))
+    return "unmatched";
+  if (!tasks || !capabilities.has(AGENT_THREAD_MESSAGE_ACTIONS_CAPABILITY))
+    throw new HttpError(400, sourceText("error.backend.threadRemoteUnsupported"));
+  const body = await readJson(request);
+  const agentId = stringField(body, "agentId");
+  if (hiddenAgentIds.has(agentId)) throw new HttpError(404, sourceText("error.team.agentNotFound"));
+  requireListedAgent(tasks, agentId);
+  requireAgentLevel(context, agentId, "chat");
+  const taskId = stringField(body, "taskId");
+  if (url.pathname === AGENT_THREAD_MESSAGE_ACTIONS_ROUTES.unread)
+    return json(
+      200,
+      tasks.markTaskUnread(
+        { agentId, taskId, fromMessageId: stringField(body, "fromMessageId") },
+        member.id,
+        markerExclusionsForCapabilities(capabilities),
+      ),
+    );
+  const emoji = body.emoji;
+  if (emoji !== null && !isMessageReaction(emoji))
+    throw new HttpError(400, sourceText("error.agent.toolRequestInvalid"));
+  await runCauseEffect(
+    tasks.setTaskMessageReaction({ agentId, taskId, messageId: stringField(body, "messageId"), emoji }),
+  );
+  return json(200, {});
 }

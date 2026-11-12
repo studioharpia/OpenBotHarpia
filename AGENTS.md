@@ -2,9 +2,10 @@
 
 ## Communication
 
-Use ASD-STE100 Simplified Technical English for all text you write: questions, updates,
-explanations, final answers, commit messages, PR descriptions, and review comments. Be as concise as
-possible. Keep quotations, code, commands, paths, identifiers, and required technical terms unchanged.
+- Responder sempre em português brasileiro: perguntas, atualizações, explicações, entregas,
+  mensagens de commit, descrições de PR e comentários de revisão. Usar outro idioma somente quando
+  o usuário pedir explicitamente. Ser conciso. Preservar citações, código, comandos, caminhos,
+  identificadores e termos técnicos necessários no idioma original.
 
 When a step doesn't need the developer's input, keep going. Put status notes in the same message as
 your next action. Stop and ask only when you can't continue without the developer, or before
@@ -278,3 +279,9 @@ They describe the enforced syntax, fixture behavior, and reasons for removed rul
   or `@ts-ignore`; disables rules through `biome.json` overrides or removes a GritQL plugin; widens
   a boundary to `any` or `unknown`; or uses an assertion to bypass a checker. Fix the domain issue,
   or explain why the rule is wrong and let the developer decide.
+
+## OpenBot repository exception
+
+Use the main checkout directly. Do not create task branches or worktrees in this repository.
+This is the user instruction of 2026-11-09 and overrides the HARPIA isolation default.
+Keep local changes uncommitted unless the user authorizes Git publication.

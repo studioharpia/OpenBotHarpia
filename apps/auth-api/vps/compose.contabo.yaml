@@ -1,0 +1,120 @@
+name: openbot-service
+services:
+  accounts:
+    image: ${OPENBOT_ACCOUNTS_IMAGE:?OPENBOT_ACCOUNTS_IMAGE is required}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      OPENBOT_AUTH_PUBLIC_ORIGIN: https://openbot.harpia.digital
+      OPENBOT_AUTH_STATE_DIRECTORY: /var/lib/openbot-accounts
+      OPENBOT_API_HOST: 0.0.0.0
+      OPENBOT_API_PORT: 3100
+      OPENBOT_AUTH_TRUSTED_PROXY_IPS: ${OPENBOT_PROXY_IP:?OPENBOT_PROXY_IP is required}
+      REMOTE_SIGNAL_URL: wss://openbot.harpia.digital/v1/signal
+      AUTH_EXPOSE_DEVELOPMENT_CODE: "false"
+      EMAIL_SMTP_HOST: smtp.resend.com
+      EMAIL_SMTP_PORT: 465
+      EMAIL_SMTP_USERNAME: resend
+      EMAIL_SMTP_PASSWORD_FILE: /run/secrets/smtp-password
+      EMAIL_FROM: ${OPENBOT_EMAIL_FROM:?OPENBOT_EMAIL_FROM is required}
+    volumes:
+      - /opt/openbot/state/accounts:/var/lib/openbot-accounts
+      - /opt/openbot/private/smtp-password:/run/secrets/smtp-password:ro
+    group_add: ["2000"]
+    networks: [dokploy-network, private]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.services.openbot-accounts.loadbalancer.server.port=3100
+      - traefik.http.routers.openbot-accounts.rule=Host(`openbot.harpia.digital`)
+      - traefik.http.routers.openbot-accounts.entrypoints=websecure
+      - traefik.http.routers.openbot-accounts.priority=10
+      - traefik.http.routers.openbot-accounts.tls.certresolver=letsencrypt
+      - traefik.http.routers.openbot-accounts.service=openbot-accounts
+      - traefik.http.routers.openbot-http.rule=Host(`openbot.harpia.digital`)
+      - traefik.http.routers.openbot-http.entrypoints=web
+      - traefik.http.routers.openbot-http.service=openbot-accounts
+      - traefik.http.routers.openbot-http.middlewares=openbot-https
+      - traefik.http.middlewares.openbot-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.openbot-https.redirectscheme.permanent=true
+  signal:
+    image: ${OPENBOT_SIGNAL_IMAGE:?OPENBOT_SIGNAL_IMAGE is required}
+    restart: unless-stopped
+    entrypoint: [/bin/sh, /opt/openbot-secrets, bun, src/index.ts]
+    environment:
+      REMOTE_SIGNAL_HOST: 0.0.0.0
+      REMOTE_SIGNAL_PORT: 8443
+      REMOTE_HEALTH_HOST: 0.0.0.0
+      REMOTE_HEALTH_PORT: 8080
+      REMOTE_TLS_DISABLED: "true"
+      REMOTE_TICKET_JWKS_URL: https://openbot.harpia.digital/.well-known/jwks.json
+      REMOTE_CONTROL_PLANE_URL: https://openbot.harpia.digital
+      REMOTE_SESSION_SECRET_FILE: /run/secrets/session-secret
+      REMOTE_AUTH_WEBHOOK_SECRET_FILE: /run/secrets/auth-webhook-secret
+      REMOTE_METRICS_TOKEN_FILE: /run/secrets/metrics-token
+      TURN_SHARED_SECRET_FILE: /run/secrets/turn-secret
+      TURN_HOST: openbot.harpia.digital
+      TURN_PORT: 3478
+      TURN_TLS_PORT: 5349
+      REMOTE_TRUST_PROXY: "true"
+    volumes:
+      - /opt/openbot/current/apps/auth-api/vps/load-secrets.sh:/opt/openbot-secrets:ro
+      - /opt/openbot/private/session-secret:/run/secrets/session-secret:ro
+      - /opt/openbot/private/auth-webhook-secret:/run/secrets/auth-webhook-secret:ro
+      - /opt/openbot/private/metrics-token:/run/secrets/metrics-token:ro
+      - /opt/openbot/private/turn-secret:/run/secrets/turn-secret:ro
+    group_add: ["2000"]
+    networks: [dokploy-network, private]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.services.openbot-signal.loadbalancer.server.port=8443
+      - traefik.http.routers.openbot-signal.rule=Host(`openbot.harpia.digital`) && (Path(`/v1/signal`) || Path(`/internal/auth-events`) || PathPrefix(`/v1/webhooks/`) || Path(`/v1/slack/events`) || Path(`/v1/github/events`) || Path(`/v1/discord/api`) || PathPrefix(`/v1/telegram/updates/`) || PathPrefix(`/v1/telegram/files/`) || PathPrefix(`/v1/telegram/uploads/`))
+      - traefik.http.routers.openbot-signal.entrypoints=websecure
+      - traefik.http.routers.openbot-signal.priority=100
+      - traefik.http.routers.openbot-signal.tls.certresolver=letsencrypt
+      - traefik.http.routers.openbot-signal.service=openbot-signal
+      - traefik.http.routers.openbot-signal-health.rule=Host(`openbot.harpia.digital`) && PathPrefix(`/_signal/health/`)
+      - traefik.http.routers.openbot-signal-health.entrypoints=websecure
+      - traefik.http.routers.openbot-signal-health.priority=100
+      - traefik.http.routers.openbot-signal-health.tls.certresolver=letsencrypt
+      - traefik.http.routers.openbot-signal-health.service=openbot-signal
+      - traefik.http.routers.openbot-signal-health.middlewares=openbot-signal-health-path
+      - traefik.http.middlewares.openbot-signal-health-path.stripprefix.prefixes=/_signal
+  turn:
+    image: ${OPENBOT_TURN_IMAGE:?OPENBOT_TURN_IMAGE is required}
+    restart: unless-stopped
+    network_mode: host
+    entrypoint: [/bin/sh, /opt/openbot-secrets, /usr/local/bin/openbot-coturn]
+    environment:
+      TURN_PUBLIC_IP: 95.111.234.71
+      TURN_REALM: openbot.harpia.digital
+      TURN_SHARED_SECRET_FILE: /run/secrets/turn-secret
+      TURN_MIN_PORT: 50000
+      TURN_MAX_PORT: 50199
+      TURN_TLS_CERT_PATH: /etc/openbot-tls/fullchain.pem
+      TURN_TLS_KEY_PATH: /etc/openbot-tls/privkey.pem
+    volumes:
+      - /opt/openbot/current/apps/auth-api/vps/load-secrets.sh:/opt/openbot-secrets:ro
+      - /opt/openbot/private/turn-secret:/run/secrets/turn-secret:ro
+      - /opt/openbot/state/tls:/etc/openbot-tls:ro
+    group_add: ["2000"]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD-SHELL, "turnutils_stunclient 127.0.0.1 -p 3478 >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+networks:
+  dokploy-network:
+    external: true
+  private:
+    internal: true

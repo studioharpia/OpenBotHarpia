@@ -2,6 +2,28 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/conversation";
 
 export const messages = {
+  "conversation.threads.error.transfer": "Não foi possível mover a tarefa.",
+
+  "conversation.sidePanel.pane.central": "Central do agente",
+  "conversation.central.mainChat": "Conversa principal",
+  "conversation.central.overview": "Visão geral",
+  "conversation.central.currentMonth": "Mês atual",
+  "conversation.central.previousMonth": "Mês anterior",
+  "conversation.central.tokens": "Tokens usados",
+  "conversation.central.finishedTasks": "Tarefas finalizadas",
+  "conversation.central.finishedHint":
+    "Tarefas contadas uma vez, pela data da primeira conclusão bem-sucedida. Inclui arquivadas.",
+  "conversation.central.completedTasks": "Concluídas",
+  "conversation.central.inProgressTasks": "Em andamento",
+  "conversation.central.emptySection": "Nenhuma tarefa nesta seção.",
+  "conversation.central.statusRunning": "Em execução",
+  "conversation.central.statusStarting": "Conectando",
+  "conversation.central.statusReady": "Disponível",
+  "conversation.central.statusUnavailable": "Indisponível",
+  "conversation.central.activity": "Atividade de tokens",
+  "conversation.central.archivedTasks": "Arquivadas",
+  "conversation.central.newTask": "Nova tarefa",
+  "conversation.central.taskActions": "Ações de {title}",
   "conversation.globalSearch.title": "Buscar no OpenBot",
   "conversation.globalSearch.filter": "Filtrar resultados",
   "conversation.globalSearch.tab.all": "Tudo",
@@ -63,6 +85,8 @@ export const messages = {
   "conversation.sidePanel.pane.browser": "Navegador",
   "conversation.sidePanel.pane.files": "Arquivos",
   "conversation.threads.new": "Novo tópico",
+  "conversation.threads.showSidebar": "Mostrar tarefas na barra lateral",
+  "conversation.threads.showTopbar": "Mostrar tarefas na barra superior",
   "conversation.threads.all": "Todos os tópicos",
   "conversation.threads.open": "Tópicos abertos",
   "conversation.threads.current": "Tópico: {title}",

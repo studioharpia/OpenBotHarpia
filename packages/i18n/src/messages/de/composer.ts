@@ -2,6 +2,17 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/composer";
 
 export const messages = {
+  "composer.templates.actions": "Vorlagenaktionen",
+  "composer.templates.hint": "Mit / im Chat eine gespeicherte Vorlage einfügen.",
+  "composer.templates.new": "Neue Vorlage",
+  "composer.templates.empty": "Keine Vorlagen.",
+  "composer.templates.editor": "Prompt-Vorlage",
+  "composer.templates.name": "Name",
+  "composer.templates.prompt": "Prompt",
+  "composer.templates.storageError": "Vorlagen konnten nicht gelesen oder gespeichert werden.",
+  "composer.templates.delete": "Vorlage löschen?",
+  "composer.templates.noMatch": "Keine passende Vorlage.",
+  "composer.templates.list": "Prompt-Vorlagen",
   "composer.queueEdit.body":
     "Du bearbeitest eine Nachricht in der Warteschlange. Speichere die Änderung oder brich sie ab, damit die Nachricht ausgeführt werden kann.",
   "composer.queueEdit.cancel": "Bearbeitung abbrechen",
@@ -77,6 +88,7 @@ export const messages = {
   "composer.placeholder.messageAgent": "Nachricht an den Agenten",
   "composer.placeholder.answer": "Gib deine Antwort ein",
   "composer.add.label": "Zur Anweisung hinzufügen",
+  "composer.add.queue": "Nachricht einreihen",
   "composer.add.files": "Dateien anhängen",
   "composer.add.skill": "Fähigkeit verwenden",
   "composer.upload.cancel": "Upload abbrechen",

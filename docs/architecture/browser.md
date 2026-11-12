@@ -110,6 +110,13 @@ the extension list for a host without it.
 `browser-tools.ts` defines provider schemas and parses each call into a typed tool and its arguments.
 `browser-tool-actions.ts` maps input tools to CDP operations. It does not own tabs or import the host.
 `BrowserHost` owns tab access checks, operation queues, focus, deadlines, and persistent browser state.
+`openbot_browser.screenshot` returns an inspection image by default. With `attach=true`, the agent
+router also persists the PNG through the generated-attachment transaction, publishes it on the caller's
+conversation (including side tasks), and returns `status: shown` only after storage succeeds. Repeating
+a call keeps one attachment message. The browser's tab ownership, takeover and secret-capture checks
+still run before any attachment is created. The focused E2E is
+`bun scripts/browser-screenshot-attachment-e2e.ts`; its report and captured image are in
+`.openbot-build/browser-screenshot-attachment-e2e/`.
 Targeted typing checks that the target still holds focus before the End key, the text, and the
 Enter key. A page focus or input handler that moves focus stops it with an error that says if the
 text is already in the field. The check also reads each frame element that holds the target,

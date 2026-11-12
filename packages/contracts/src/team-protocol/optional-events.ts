@@ -3,6 +3,7 @@ import { type AgentColorsEvent, agentColorsEvent } from "./agent-colors-v1";
 import { type AgentHiddenEvent, agentHiddenEvent } from "./agent-hidden-v1";
 import { type AgentNotificationLevelsEvent, agentNotificationLevelsEvent } from "./agent-notification-levels-v1";
 import { type AgentSessionSettingsEvent, agentSessionSettingsEvent } from "./agent-session-settings-v1";
+import { agentTaskLimitV2Event } from "./agent-task-limit-v2";
 import { withAgentTaskEventUiBlocks } from "./agent-task-ui-blocks-v1";
 import { type AgentTasksEvent, agentTasksEvent } from "./agent-tasks-v1";
 import { type BrowserPageStateEvent, browserPageStateEvent } from "./browser-page-state-v1";
@@ -66,6 +67,7 @@ export function optionalTeamEvent(value: unknown, options?: OptionalTeamEventOpt
     browserPageStateEvent(value) ??
     browserProfilesEvent(value) ??
     browserUserControlEvent(value) ??
+    agentTaskLimitV2Event(value) ??
     agentTasksEvent(value) ??
     channelEvent(value) ??
     hostRestartEvent(value) ??

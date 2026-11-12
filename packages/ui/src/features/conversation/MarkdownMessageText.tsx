@@ -3,7 +3,7 @@ import { attachmentReferenceAt } from "@openbot/contracts/attachment-references"
 import { blockChatMath, chatMathBlockStart, chatMathStart, inlineChatMath } from "@openbot/contracts/chat-math";
 import { chatPreviewKind } from "@openbot/contracts/chat-preview";
 import { INPUT_LIMITS } from "@openbot/contracts/input-limits";
-import { Button, Checkbox } from "@openbot/ui";
+import { Button, Checkbox, ContextMenu, FolderOpen } from "@openbot/ui";
 import { Dynamic } from "@solidjs/web";
 import { Marked, type Token, type Tokens, type TokensList } from "marked";
 import { createMemo, For, Show } from "solid-js";
@@ -284,6 +284,7 @@ export function MarkdownMessageText(props: MarkdownMessageTextProps) {
       onOpenAttachment: props.onOpenAttachment,
       onOpenSharedFile: props.onOpenSharedFile,
       onOpenWorkspaceFile: props.onOpenWorkspaceFile,
+      onRevealLocalFile: props.onRevealLocalFile,
       onOpenQuote: props.onOpenQuote,
       onOpenTag: props.onOpenTag,
       linkFavicons: props.linkFavicons,
@@ -323,6 +324,7 @@ export function MarkdownInlineText(
     onOpenAttachment: props.onOpenAttachment,
     onOpenSharedFile: props.onOpenSharedFile,
     onOpenWorkspaceFile: props.onOpenWorkspaceFile,
+    onRevealLocalFile: props.onRevealLocalFile,
     onOpenQuote: props.onOpenQuote,
     onOpenTag: props.onOpenTag,
     linkFavicons: props.linkFavicons,
@@ -703,6 +705,7 @@ function MarkdownInline(props: {
             const openWorkspace = props.content.onOpenWorkspaceFile;
             return file && file.kind === "shared" && openShared ? (
               <LocalFileLink
+                onReveal={props.content.onRevealLocalFile}
                 path={file.path}
                 label={token.text}
                 kind="shared"
@@ -710,6 +713,7 @@ function MarkdownInline(props: {
               />
             ) : file && file.kind === "workspace" && openWorkspace ? (
               <LocalFileLink
+                onReveal={props.content.onRevealLocalFile}
                 path={file.path}
                 label={token.text}
                 kind="workspace"
@@ -751,6 +755,7 @@ function MarkdownInline(props: {
               </MessageLink>
             ) : sharedPath && props.content.onOpenSharedFile ? (
               <LocalFileLink
+                onReveal={props.content.onRevealLocalFile}
                 path={sharedPath}
                 label={markdownInlinePlainText(token.tokens) || token.text}
                 kind="shared"
@@ -758,6 +763,7 @@ function MarkdownInline(props: {
               />
             ) : workspacePath && props.content.onOpenWorkspaceFile ? (
               <LocalFileLink
+                onReveal={props.content.onRevealLocalFile}
                 path={workspacePath}
                 label={markdownInlinePlainText(token.tokens) || token.text}
                 kind="workspace"
@@ -1103,6 +1109,7 @@ function LocalFileLink(props: {
   label: string;
   kind: "shared" | "workspace";
   onOpen: (path: string) => void;
+  onReveal?: ((path: string, kind: "shared" | "workspace") => void) | undefined;
 }) {
   const { t } = useText();
   // A workspace path that ends with a separator is a folder chip, such as `research/eyeliner/`.
@@ -1113,21 +1120,43 @@ function LocalFileLink(props: {
     return folder ? t("chat.file.openWorkspaceFolder", { name }) : t("chat.file.openWorkspace", { name });
   };
   return (
-    <Button
-      variant="ghost"
-      type="button"
-      class="message-file-reference"
-      data-file-tone={attachmentReferenceTone(name)}
-      aria-label={label()}
-      title={props.path}
-      data-cuelume-tap="open"
-      onClick={() => props.onOpen(props.path)}
-    >
-      <AttachmentReferenceVisual name={name} />
-      <span class="inline-file-reference-name" dir="auto">
-        {props.label || name}
-      </span>
-    </Button>
+    <ContextMenu.Root modal={false}>
+      <ContextMenu.Trigger
+        as="span"
+        disabled={!props.onReveal}
+        onContextMenu={(event: MouseEvent) => {
+          if (props.onReveal) event.stopPropagation();
+        }}
+      >
+        <Button
+          variant="ghost"
+          type="button"
+          class="message-file-reference"
+          data-file-tone={attachmentReferenceTone(name)}
+          aria-label={label()}
+          title={props.path}
+          data-cuelume-tap="open"
+          onClick={() => props.onOpen(props.path)}
+        >
+          <AttachmentReferenceVisual name={name} />
+          <span class="inline-file-reference-name" dir="auto">
+            {props.label || name}
+          </span>
+        </Button>
+      </ContextMenu.Trigger>
+      <Show when={props.onReveal}>
+        {(reveal) => (
+          <ContextMenu.Portal>
+            <ContextMenu.Content>
+              <ContextMenu.Item onSelect={() => reveal()(props.path, props.kind)}>
+                <FolderOpen aria-hidden="true" />
+                {t("files.action.reveal")}
+              </ContextMenu.Item>
+            </ContextMenu.Content>
+          </ContextMenu.Portal>
+        )}
+      </Show>
+    </ContextMenu.Root>
   );
 }
 

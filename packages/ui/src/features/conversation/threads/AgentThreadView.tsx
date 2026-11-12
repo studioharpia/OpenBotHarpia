@@ -6,6 +6,7 @@ import type {
   AttachmentSummary,
   DraftAttachment,
   InstalledSkill,
+  MessageReaction,
   QueueDelivery,
 } from "@openbot/contracts/ipc";
 import type { AppTextKey } from "@openbot/i18n";
@@ -67,6 +68,8 @@ import { ComposerVoiceControls, type VoicePhase } from "@openbot/ui/features/con
 import { type TextValue, useText } from "@openbot/ui/text";
 import type { JSX } from "@solidjs/web";
 import { children, createEffect, createMemo, createSignal, For, onCleanup, onSettled, Show, untrack } from "solid-js";
+import { imageMessageRows } from "../image-message-rows";
+import { chronologicalMessageRows } from "../message-row-order";
 import { type AgentThreadBranchSource, BranchDivider } from "./BranchDivider";
 import { MAIN_THREAD_ID } from "./thread-types";
 
@@ -202,7 +205,7 @@ export interface AgentThreadViewProps {
   /** Each increase moves the caret to the end of the text, as after a dictation. */
   focusRequest?: number | undefined;
   /** Sends a message. The host clears the text when the message went; when it did not, the text stays. */
-  onSend: (text: string) => Promise<boolean>;
+  onSend: (text: string, deliveryMode?: "queue" | "steer") => Promise<boolean>;
   onStop: () => void;
   onOpenLink: (url: string) => void;
   /**
@@ -251,6 +254,10 @@ export interface AgentThreadViewProps {
   sendShortcut?: SendShortcut | undefined;
   /** Copies a message. Without it, the messages have no action row and no right-click menu. */
   onCopyMessage?: ((message: AgentMessage) => void) | undefined;
+  onMarkUnread?: ((messageId: string) => Promise<void>) | undefined;
+  canMarkUnread?: ((message: AgentMessage) => boolean) | undefined;
+  onReactMessage?: ((messageId: string, emoji: MessageReaction | null) => Promise<void>) | undefined;
+  sendToChannel?: ((message: AgentMessage) => MessageMenuItemsProps["sendToChannel"]) | undefined;
   /** The message that the copy action copied a moment ago. The full action row shows it. */
   copiedMessageId?: string | null | undefined;
   /**
@@ -455,7 +462,7 @@ export function AgentThreadView(props: AgentThreadViewProps) {
   const recording = () => voicePhase() === "recording";
   /** As in the agent's own chat, nothing sends while the microphone opens or the speech becomes text. */
   const voiceBusy = () => voicePhase() !== "idle" && !recording();
-  const send = async () => {
+  const send = async (deliveryMode?: "queue" | "steer") => {
     // As in the agent's own chat, a send while recording sends what was said.
     if (recording()) {
       props.voice?.onSend();
@@ -465,7 +472,7 @@ export function AgentThreadView(props: AgentThreadViewProps) {
     if (draftEmpty() || sending() || voiceBusy()) return;
     setSending(true);
     try {
-      await props.onSend(text);
+      await props.onSend(text, deliveryMode);
     } finally {
       setSending(false);
     }
@@ -517,6 +524,7 @@ export function AgentThreadView(props: AgentThreadViewProps) {
             author={author(current())}
             showAuthor
             showTime
+            timeBeside
             agents={props.agents}
             skills={props.skills}
             // The sender's name opens the thread that sent the message, or else the sender's own chat, as in the chat.
@@ -539,8 +547,13 @@ export function AgentThreadView(props: AgentThreadViewProps) {
   function menuItems(message: AgentMessage, onCopy: (message: AgentMessage) => void): MessageMenuItemsProps {
     return {
       message,
-      reactions: false,
-      onReact: () => undefined,
+      reactions: props.onReactMessage !== undefined,
+      onReact: (emoji) => void props.onReactMessage?.(message.id, emoji),
+      onMarkUnread:
+        props.onMarkUnread && props.canMarkUnread?.(message) && !message.streaming
+          ? () => void props.onMarkUnread?.(message.id)
+          : undefined,
+      sendToChannel: props.sendToChannel?.(message),
       onReply: replyAction(message),
       onCopy: () => onCopy(message),
       onBranch: branchAction(message),
@@ -681,6 +694,102 @@ export function AgentThreadView(props: AgentThreadViewProps) {
       busy={sending()}
     />
   );
+  const mediaRows = createMemo(() =>
+    imageMessageRows(chronologicalMessageRows(props.messages.filter(shownRow)), {
+      before: new Set(
+        props.messages
+          .filter((message) => (props.stepsAbove?.(message.id)?.length ?? 0) > 0)
+          .map((message) => message.id),
+      ),
+      after: new Set(branchDividerId() ? [branchDividerId() ?? ""] : []),
+    }),
+  );
+  function ThreadMessageRow(rowProps: { message: AgentMessage; embedded?: boolean }) {
+    const message = () => rowProps.message;
+    const card = createMemo(() => props.messageCard?.(message()));
+    return (
+      <div class={rowProps.embedded ? "message-media-cell" : "virtual-chat-row"}>
+        <Show when={!rowProps.embedded && props.stepsAbove?.(message().id)}>
+          {(steps) => (
+            <AgentStepsDisclosure
+              steps={steps()}
+              defaultOpen={props.stepsOpenByDefault ?? false}
+              facts={props.factsAbove?.(message().id)}
+            />
+          )}
+        </Show>
+        <Show when={message().kind !== "thinking" && agentMessageMarker(message())}>
+          {(marker) => (
+            <article data-chat-search-message={message().id}>
+              <ChatActionMarker
+                marker={marker()}
+                agents={props.agents}
+                onSelectAgent={(agentId, tabId) => props.onSelectAgent?.(agentId, tabId)}
+                onToggleAgentMessage={toggleAgentMessage}
+                agentMessageText={agentMessageText}
+              />
+              <Show when={marker().direction === "incoming" && (message().attachments?.length ?? 0) > 0}>
+                <div class="chat-action-attachments">
+                  <AttachmentCards
+                    attachments={message().attachments ?? []}
+                    mediaSource={props.mediaSource}
+                    downloads={props.downloads}
+                    onPreview={(attachment) => props.onPreview(attachment)}
+                    onAction={props.onAttachmentAction}
+                  />
+                </div>
+              </Show>
+            </article>
+          )}
+        </Show>
+        <Show when={message().kind !== "thinking" && !agentMessageMarker(message())}>
+          <Show
+            when={card()}
+            fallback={
+              <ChatMessageRow
+                message={message()}
+                author={author(message())}
+                showFull={props.showFullMessage?.(message())}
+                agents={props.agents}
+                skills={props.skills}
+                onSelectAgent={() => undefined}
+                onOpenTag={props.onOpenTag}
+                onOpenLink={props.onOpenLink}
+                onPreview={props.onPreview}
+                onAttachmentAction={props.onAttachmentAction}
+                mediaSource={props.mediaSource}
+                downloads={props.downloads}
+                onDownload={(attachment) => props.onAttachmentAction(attachment, "download")}
+                macWindowControls={props.macWindowControls}
+                referencedMessage={referenced(message())}
+                onOpenReference={() => {
+                  const id = message().replyToMessageId;
+                  if (id) showMessage(id);
+                }}
+                reactions={
+                  message().reactions ??
+                  (message().reaction
+                    ? [{ emoji: message().reaction ?? "", actor: { kind: "user" as const } }]
+                    : undefined)
+                }
+                onRemoveReaction={() => void props.onReactMessage?.(message().id, null)}
+                actions={messageActions(message())}
+                timeBeside
+                menu={messageMenu(message())}
+                data-chat-search-message={message().id}
+              />
+            }
+          >
+            {card()}
+          </Show>
+        </Show>
+        <Show when={!rowProps.embedded && branchDividerAfter(message().id)}>
+          {(source) => <BranchDivider source={source()} />}
+        </Show>
+      </div>
+    );
+  }
+
   return (
     <>
       <Show when={props.selectionActions}>
@@ -730,81 +839,30 @@ export function AgentThreadView(props: AgentThreadViewProps) {
               {t("conversation.threads.view.startedByAgent", { name: props.agent.name })}
             </p>
           </Show>
-          <For each={props.messages.filter(shownRow)} keyed={(message) => message.id}>
-            {(message) => {
-              const card = createMemo(() => props.messageCard?.(message()));
-              return (
+          <For each={mediaRows()} keyed={(row) => row.id}>
+            {(row) => (
+              <Show when={row().messages.length > 1} fallback={<ThreadMessageRow message={row().messages[0]} />}>
                 <div class="virtual-chat-row">
-                  <Show when={props.stepsAbove?.(message().id)}>
+                  <Show when={props.stepsAbove?.(row().id)}>
                     {(steps) => (
                       <AgentStepsDisclosure
                         steps={steps()}
                         defaultOpen={props.stepsOpenByDefault ?? false}
-                        facts={props.factsAbove?.(message().id)}
+                        facts={props.factsAbove?.(row().id)}
                       />
                     )}
                   </Show>
-                  <Show when={message().kind !== "thinking" && agentMessageMarker(message())}>
-                    {(marker) => (
-                      <article data-chat-search-message={message().id}>
-                        <ChatActionMarker
-                          marker={marker()}
-                          agents={props.agents}
-                          onSelectAgent={(agentId, tabId) => props.onSelectAgent?.(agentId, tabId)}
-                          onToggleAgentMessage={toggleAgentMessage}
-                          agentMessageText={agentMessageText}
-                        />
-                        <Show when={marker().direction === "incoming" && (message().attachments?.length ?? 0) > 0}>
-                          <div class="chat-action-attachments">
-                            <AttachmentCards
-                              attachments={message().attachments ?? []}
-                              mediaSource={props.mediaSource}
-                              downloads={props.downloads}
-                              onPreview={(attachment) => props.onPreview(attachment)}
-                              onAction={props.onAttachmentAction}
-                            />
-                          </div>
-                        </Show>
-                      </article>
-                    )}
+                  <div class="message-media-run">
+                    <For each={row().messages} keyed={(message) => message.id}>
+                      {(message) => <ThreadMessageRow message={message()} embedded />}
+                    </For>
+                  </div>
+                  <Show when={branchDividerAfter(row().messages.at(-1)?.id ?? "")}>
+                    {(source) => <BranchDivider source={source()} />}
                   </Show>
-                  <Show when={message().kind !== "thinking" && !agentMessageMarker(message())}>
-                    <Show
-                      when={card()}
-                      fallback={
-                        <ChatMessageRow
-                          message={message()}
-                          author={author(message())}
-                          showFull={props.showFullMessage?.(message())}
-                          agents={props.agents}
-                          skills={props.skills}
-                          onSelectAgent={() => undefined}
-                          onOpenTag={props.onOpenTag}
-                          onOpenLink={props.onOpenLink}
-                          onPreview={props.onPreview}
-                          onAttachmentAction={props.onAttachmentAction}
-                          mediaSource={props.mediaSource}
-                          downloads={props.downloads}
-                          onDownload={(attachment) => props.onAttachmentAction(attachment, "download")}
-                          macWindowControls={props.macWindowControls}
-                          referencedMessage={referenced(message())}
-                          onOpenReference={() => {
-                            const id = message().replyToMessageId;
-                            if (id) showMessage(id);
-                          }}
-                          actions={messageActions(message())}
-                          menu={messageMenu(message())}
-                          data-chat-search-message={message().id}
-                        />
-                      }
-                    >
-                      {card()}
-                    </Show>
-                  </Show>
-                  <Show when={branchDividerAfter(message().id)}>{(source) => <BranchDivider source={source()} />}</Show>
                 </div>
-              );
-            }}
+              </Show>
+            )}
           </For>
           <Show when={running()}>
             {(task) => (
@@ -957,6 +1015,7 @@ export function AgentThreadView(props: AgentThreadViewProps) {
               placeholder={props.replyTo ? t("composer.placeholder.reply") : placeholder()}
               ariaLabel={placeholder()}
               focusRequest={(props.focusRequest ?? 0) + replyFocus()}
+              focusOnOpen={props.task?.id ?? props.agent.id}
               quoteRequest={quoteRequest()}
               skillPickerRequest={skillPickerRequest()}
               dictation={{ text: props.voice?.liveText ?? "", final: voicePhase() === "transcribing" }}
@@ -976,6 +1035,11 @@ export function AgentThreadView(props: AgentThreadViewProps) {
               onAttach={props.onAttachFiles}
               onPickSkill={() => setSkillPickerRequest((current) => current + 1)}
               onSideQuestion={props.onSideQuestion}
+              onQueue={
+                props.task?.activeTurnId && props.queue && !draftEmpty() && voicePhase() === "idle" && !editingQueued()
+                  ? () => void send("queue")
+                  : undefined
+              }
             />
             <div class="composer-primary-actions">
               {/* One meter for each thread: a pending Compact or an open popover stays with its thread. */}

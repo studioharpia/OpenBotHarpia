@@ -212,6 +212,8 @@ function TasksPageStory(props: {
           hostName="This computer"
           onBack={fn()}
           source={desktopTasksSource()}
+          onRenameTask={(task, title) => mock.api.agent.renameTask({ agentId: task.agentId, taskId: task.id, title })}
+          onDeleteTask={(task) => mock.api.agent.deleteTask({ agentId: task.agentId, taskId: task.id })}
           agents={props.agents ?? TASK_AGENTS}
           onOpenLink={fn()}
           onAttachmentAction={fn()}
@@ -233,7 +235,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The tasks of three agents. A send waits six seconds for Undo; a row opens the task beside the list. */
+/** The real Kanban with all runtime states. A card opens its conversation beside the board. */
 export const Default: Story = { render: () => <TasksPageStory tasks={TASKS} /> };
 /** No tasks: only the composer. */
 export const Empty: Story = { render: () => <TasksPageStory tasks={[]} /> };

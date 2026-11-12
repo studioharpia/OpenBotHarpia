@@ -18,7 +18,10 @@ export interface AgentTasksPort
    * The person's read mark of each open thread of an agent. Missing where the client does not read the
    * marks: no thread then shows as unread.
    */
+  transferTask?: OpenBotDesktopApi["agent"]["transferTask"];
   listTaskReads?: OpenBotDesktopApi["agent"]["listTaskReads"];
+  markTaskUnread?: OpenBotDesktopApi["agent"]["markTaskUnread"];
+  setTaskMessageReaction?: OpenBotDesktopApi["agent"]["setTaskMessageReaction"];
   /** Steers the thread's running turn, or queues the message in the thread. */
   sendToTask(
     input: AgentTaskInput & {
@@ -26,6 +29,8 @@ export interface AgentTasksPort
       attachmentDraftIds?: string[];
       replyToMessageId?: string;
       clientMessageId: string;
+      deliveryMode?: "queue" | "steer";
+      expectedTurnId?: string;
     },
   ): Promise<unknown>;
   /** Missing where the server cannot move a queued message of the agent's own chat to a new thread. */
@@ -48,7 +53,7 @@ export interface AgentTasksPort
  * delete that waits for its Undo time names its server, so a server switch does not move it.
  * Read on each call: tests and stories replace `window.openbot` per case.
  */
-export function agentTasksPort(): AgentTasksPort {
+export function agentTasksPort(serverId?: string): AgentTasksPort {
   const { agent } = window.openbot;
   return {
     listTasks: (agentId) => agent.listTasks(agentId),
@@ -58,6 +63,7 @@ export function agentTasksPort(): AgentTasksPort {
     sendToTask: (input) => agent.sendMessage(input),
     runQueuedMessageAsTask: (input) => agent.runQueuedMessageAsTask(input),
     branchTask: (input) => agent.branchTask(input),
+    transferTask: (input) => agent.transferTask(input, serverId),
     stopTask: (input) => agent.stopTask(input),
     closeTask: (input, serverId) => agent.closeTask(input, serverId),
     reopenTask: (input, serverId) => agent.reopenTask(input, serverId),
@@ -65,7 +71,9 @@ export function agentTasksPort(): AgentTasksPort {
     deleteTask: (input, serverId) => agent.deleteTask(input, serverId),
     deleteTaskMessage: (input) => agent.deleteConversationMessage(input),
     listTaskReads: (agentId) => agent.listTaskReads(agentId),
-    markTaskRead: (input) => agent.markTaskRead(input),
+    markTaskRead: (input) => agent.markTaskRead(input, serverId),
+    markTaskUnread: (input) => agent.markTaskUnread(input, serverId),
+    setTaskMessageReaction: (input) => agent.setTaskMessageReaction(input, serverId),
     queue: {
       cancelQueuedMessage: (input) => agent.cancelQueuedMessage(input),
       steerQueuedMessage: (input) => agent.steerQueuedMessage(input),

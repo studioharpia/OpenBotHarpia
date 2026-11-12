@@ -16,11 +16,11 @@
 // Run: `bun run test:team-api-routes` (the preload gives the server's import graph an `electron`).
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { request as httpRequest } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { join, parse, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { ATTACHMENT_LIMITS, INPUT_LIMITS } from "@openbot/contracts/input-limits";
+import { ATTACHMENT_LIMITS, DEFAULT_TEAM_MEMBER_LIMIT, INPUT_LIMITS } from "@openbot/contracts/input-limits";
 import {
   AGENT_PROVIDERS,
   type AgentEvent,
@@ -84,6 +84,10 @@ import {
   AGENT_TASK_LIMIT_CAPABILITY,
   AGENT_TASK_LIMIT_ROUTES,
 } from "@openbot/contracts/team-protocol/agent-task-limit-v1";
+import {
+  AGENT_TASK_TRANSFER_CAPABILITY,
+  AGENT_TASK_TRANSFER_ROUTE,
+} from "@openbot/contracts/team-protocol/agent-task-transfer-v1";
 import {
   AGENT_THREAD_PAGES_CAPABILITY,
   AGENT_THREAD_PAGES_ROUTES,
@@ -188,6 +192,7 @@ import {
 } from "@openbot/contracts/team-protocol/whatsapp-connector-v1";
 import { sourceText } from "@openbot/i18n/source";
 import { createOpenBotLogger } from "@openbot/logging";
+import { RemoteTeamDirectoryClient } from "@openbot/team-client/remote-directory";
 import { Effect } from "effect";
 import { SteerUnsupportedError } from "../src/backend/agent/queue-controls";
 import { AgentLifecycleFailed } from "../src/backend/agent-service";
@@ -208,6 +213,7 @@ import { AgentNotificationLevelStore } from "../src/main/agent-notification-leve
 import { type BitwardenCliRunner, BitwardenConnectorService } from "../src/main/bitwarden-connector-service";
 import { BitwardenConnectorStore } from "../src/main/bitwarden-connector-store";
 import { createBrowserProfileService } from "../src/main/browser-profile-service";
+import { decodeRemoteHosts } from "../src/main/central-auth-records";
 import { MachineAlertMonitor, MachineAlertPreferenceStore } from "../src/main/machine-alerts";
 import { MemoryReviewPreferenceStore } from "../src/main/memory-review-preference-store";
 import type { PasswordManagerDriver } from "../src/main/password-managers/driver";
@@ -767,6 +773,10 @@ const fakeAgents: TeamApiAgents = {
 // (`agent-thread-pages-v1`) reach the side threads in this run. The thread holds one message before
 // `message-7`, and no other message.
 const fakeAgentTasks: TeamApiAgentTasks = {
+  transferTask: (input) =>
+    Effect.sync(() => {
+      record("transferTask", input);
+    }),
   listAgents: () => agents,
   listTasks: unused("listTasks"),
   readTask: unused("readTask"),
@@ -810,6 +820,8 @@ const fakeAgentTasks: TeamApiAgentTasks = {
   deleteTask: unused("deleteTask"),
   listTaskReads: unused("listTaskReads"),
   markTaskRead: unused("markTaskRead"),
+  markTaskUnread: unused("markTaskUnread"),
+  setTaskMessageReaction: unused("setTaskMessageReaction"),
   branchTask: unused("branchTask"),
 };
 
@@ -1753,15 +1765,86 @@ try {
   );
   assert.ok(typeof bobToken === "string" && typeof bobId === "string", "bob did not join.");
 
+  const extraMembers: string[] = [];
+  for (const username of ["carol", "dave", "eve", "frank", "grace", "heidi", "ivan"]) {
+    const seatInvite = await runCauseEffect(store.createInvite("member"));
+    const joined = await call("POST", TEAM_API_ROUTES.join.server, {
+      json: { inviteToken: seatInvite.token, username, password: `${username}-password-e2e` },
+    });
+    const memberId = field(joined.body, "member", "id");
+    check(`${username} joins above the former three-member limit`, joined.status === 201, { status: joined.status });
+    assert.ok(typeof memberId === "string", `${username} did not join.`);
+    extraMembers.push(memberId);
+  }
   const seatInvite = await runCauseEffect(store.createInvite("member"));
-  const fourth = await call("POST", TEAM_API_ROUTES.join.server, {
-    json: { inviteToken: seatInvite.token, username: "carol", password: "carol-password-e2e" },
+  const eleventh = await call("POST", TEAM_API_ROUTES.join.server, {
+    json: { inviteToken: seatInvite.token, username: "judy", password: "judy-password-e2e" },
   });
   check(
-    "a fourth member is refused with memberLimit",
-    errorIs(fourth, 400, sourceText("error.team.memberLimit", { limit: 3 })) && store.listMembers().length === 3,
-    summary(fourth),
+    "an eleventh member is refused with memberLimit and ten members remain",
+    errorIs(eleventh, 400, sourceText("error.team.memberLimit", { limit: DEFAULT_TEAM_MEMBER_LIMIT })) &&
+      store.listMembers().length === 10,
+    summary(eleventh),
   );
+  // Restore the three members used by the route scenarios below.
+  for (const memberId of extraMembers) await runCauseEffect(store.removeMember(memberId));
+
+  // ---- Member limits from new, custom and older account services ----
+  {
+    const hosts = [
+      { hostId: "current", memberLimit: 10 },
+      { hostId: "custom", memberLimit: 5 },
+      { hostId: "legacy" },
+    ].map((host) => ({
+      ...host,
+      name: host.hostId,
+      membershipId: `membership-${host.hostId}`,
+      role: "owner",
+      authEpoch: 1,
+      logoKey: null,
+      devicePublicKey: "fixture-host-key",
+    }));
+    const directoryServer = createServer((request, response) => {
+      if (request.url !== "/v2/remote/hosts/" || request.headers.authorization !== "Bearer fixture-account") {
+        response.writeHead(401).end();
+        return;
+      }
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ hosts }));
+    });
+    await new Promise<void>((done) => directoryServer.listen(0, "127.0.0.1", done));
+    try {
+      const address = directoryServer.address();
+      assert.ok(address && typeof address === "object");
+      const url = `http://127.0.0.1:${address.port}`;
+      const client = new RemoteTeamDirectoryClient({
+        apiUrl: url,
+        token: "fixture-account",
+        fetch,
+        verifyHostKeySignature: () => Effect.succeed(false),
+      });
+      const shared = await Effect.runPromise(client.listHosts());
+      const response = await fetch(`${url}/v2/remote/hosts/`, {
+        headers: { Authorization: "Bearer fixture-account" },
+      });
+      const desktop = decodeRemoteHosts(await response.json());
+      for (const [name, expected] of [
+        ["current", 10],
+        ["custom", 5],
+        ["legacy", 3],
+      ] as const) {
+        const sharedLimit = shared.find((host) => host.hostId === name)?.memberLimit;
+        const desktopLimit = desktop.find((host) => host.hostId === name)?.memberLimit;
+        check(
+          `${name} account service: desktop and shared mobile/web directory keep limit ${expected}`,
+          sharedLimit === expected && desktopLimit === expected,
+          { sharedLimit, desktopLimit },
+        );
+      }
+    } finally {
+      await new Promise<void>((done, reject) => directoryServer.close((error) => (error ? reject(error) : done())));
+    }
+  }
 
   // ---- Sign-in, rate limit, account sign-in, logout ----
   {
@@ -2721,6 +2804,62 @@ try {
   }
 
   // ---- Exact agent colours (agent-colors-v1) ----
+  {
+    const capabilities = ["agent-tasks-v1", AGENT_TASK_TRANSFER_CAPABILITY];
+    const input = {
+      agentId: "agent-ada",
+      targetAgentId: "agent-oc",
+      taskId: "task-transfer",
+      requestId: "transfer-request",
+    };
+    const before = callsOf("transferTask").length;
+    const missingCapability = await call("POST", AGENT_TASK_TRANSFER_ROUTE, {
+      token: bobToken,
+      json: input,
+      capabilities: ["agent-tasks-v1"],
+    });
+    const missingTarget = await call("POST", AGENT_TASK_TRANSFER_ROUTE, {
+      token: bobToken,
+      json: { ...input, targetAgentId: "agent-gone" },
+      capabilities,
+    });
+    accessLevels = { revision: 49, everyone: { "agent-pi": "none" }, roles: [] };
+    const hiddenTarget = await call("POST", AGENT_TASK_TRANSFER_ROUTE, {
+      token: bobToken,
+      json: { ...input, targetAgentId: "agent-pi" },
+      capabilities,
+    });
+    accessLevels = { revision: 50, everyone: { "agent-ada": "view" }, roles: [] };
+    const sourceDenied = await call("POST", AGENT_TASK_TRANSFER_ROUTE, { token: bobToken, json: input, capabilities });
+    accessLevels = { revision: 51, everyone: { "agent-oc": "view" }, roles: [] };
+    const targetDenied = await call("POST", AGENT_TASK_TRANSFER_ROUTE, { token: bobToken, json: input, capabilities });
+    accessLevels = { revision: 52, everyone: {}, roles: [] };
+    const malformed = await call("POST", AGENT_TASK_TRANSFER_ROUTE, {
+      token: bobToken,
+      json: { ...input, requestId: "" },
+      capabilities,
+    });
+    check(
+      "task transfer requires capability, existing visible target, chat on both agents and a request id before reaching the service",
+      missingCapability.status === 400 &&
+        missingTarget.status === 404 &&
+        hiddenTarget.status === 404 &&
+        sourceDenied.status === 403 &&
+        targetDenied.status === 403 &&
+        malformed.status === 400 &&
+        callsOf("transferTask").length === before,
+      [missingCapability, missingTarget, hiddenTarget, sourceDenied, targetDenied, malformed].map(summary),
+    );
+    const accepted = await call("POST", AGENT_TASK_TRANSFER_ROUTE, { token: bobToken, json: input, capabilities });
+    check(
+      "task transfer accepts the unchanged same-host identifiers and an empty response",
+      accepted.status === 200 &&
+        isDeepStrictEqual(accepted.body, {}) &&
+        isDeepStrictEqual(callsOf("transferTask").at(-1), [input]),
+      summary(accepted),
+    );
+  }
+
   {
     const colorCapabilities = [AGENT_HIDDEN_CAPABILITY, TEAM_QUEUE_EDIT_CAPABILITY, AGENT_COLORS_CAPABILITY];
     const compatibility = await call("GET", TEAM_API_ROUTES.compatibility, { protocol: TEAM_PROTOCOL_V9 });

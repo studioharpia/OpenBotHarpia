@@ -37,6 +37,7 @@ import type {
   RespondToPromptInput,
   Routine,
   RoutineRun,
+  SendMessageInput,
   ServerNotificationLevel,
   SetAgentHiddenInput,
   SetAgentNotificationLevelInput,
@@ -102,6 +103,10 @@ import { CHAT_COLORS_CAPABILITY } from "@openbot/contracts/team-protocol/chat-co
 import { TEAM_BROWSER_NAVIGATION_CAPABILITY } from "@openbot/contracts/team-protocol/current";
 import { FOCUS_USE_ROUTES } from "@openbot/contracts/team-protocol/focus-use-v1";
 import { MESSAGE_DELETE_CAPABILITY, MESSAGE_DELETE_ROUTES } from "@openbot/contracts/team-protocol/message-delete-v1";
+import {
+  MESSAGE_DELIVERY_CAPABILITY,
+  MESSAGE_DELIVERY_ROUTE,
+} from "@openbot/contracts/team-protocol/message-delivery-v1";
 import {
   MODEL_VISIBILITY_CAPABILITY,
   MODEL_VISIBILITY_ROUTES,
@@ -285,6 +290,7 @@ export interface WebWorkspaceRuntime {
     attachmentDraftIds: string[],
     replyToMessageId?: string | null,
     clientMessageId?: string,
+    delivery?: Pick<SendMessageInput, "deliveryMode" | "expectedTurnId">,
   ): Promise<string>;
   stop(agentId: string, turnId: string): Promise<void>;
   /** Sends which agent this member is writing to, or `null`. It does nothing while the host is offline. */
@@ -1199,8 +1205,10 @@ export function createWebWorkspaceRuntime(
         throw new Error(currentText().t("error.remote.invalidData"));
       return `data:${value.mimeType};base64,${value.base64}`;
     },
-    async send(id, text, attachmentDraftIds, replyToMessageId = null, clientMessageId) {
-      const result = await request("POST", TEAM_API_ROUTES.agent.messages(id), {
+    async send(id, text, attachmentDraftIds, replyToMessageId = null, clientMessageId, delivery) {
+      const atomic = delivery?.deliveryMode && capabilities.includes(MESSAGE_DELIVERY_CAPABILITY);
+      const result = await request("POST", atomic ? MESSAGE_DELIVERY_ROUTE : TEAM_API_ROUTES.agent.messages(id), {
+        ...(atomic ? { agentId: id, ...delivery } : {}),
         text,
         attachmentDraftIds,
         replyToMessageId,

@@ -18,7 +18,7 @@ import { deviceQuoteShortcut, deviceSendShortcut } from "../../send-shortcut-pre
 import { ConversationBrowserTakeover } from "./ConversationBrowserTakeover";
 import { ConversationQuestionPrompt } from "./ConversationQuestionPrompt";
 import { chatSearchOpensMessage } from "./chat-search";
-import { latestVisibleAgentMessageId } from "./conversation-read-state";
+import { isIncomingAgentMessage, latestVisibleAgentMessageId } from "./conversation-read-state";
 import { useConversationViewScope } from "./conversation-scope";
 import type { ConversationThreads } from "./conversation-types";
 import { useThreadMcpSignInCard } from "./McpSignInChatCard";
@@ -63,6 +63,7 @@ export function ConversationThread() {
     setThreadScrollElement,
     copyMessage,
     copiedMessageId,
+    threadSendToChannel,
     branchThread,
   } = useConversationViewScope();
   const { t, errorMessage } = useText();
@@ -104,12 +105,12 @@ export function ConversationThread() {
   // phone no longer shows the thread as unread.
   createEffect(
     () => ({
-      taskId: props.threads?.open?.id,
+      task: appFocused() && !props.workspaceCovered && props.threads?.conversation ? props.threads.open : null,
       messageId: appFocused() ? latestVisibleAgentMessageId(messages) : null,
       read: props.threads?.onRead,
     }),
-    ({ taskId, messageId, read }) => {
-      if (taskId && messageId && read) read(messageId);
+    ({ task, messageId, read }) => {
+      if (task && read) read(messageId);
     },
   );
   const view = () => {
@@ -280,12 +281,12 @@ export function ConversationThread() {
             onSideQuestion={askSideQuestion()}
             voice={voice()}
             focusRequest={focusRequest()}
-            onSend={(text) => {
+            onSend={(text, deliveryMode) => {
               // While a queued message is in the message box, Send saves it in its place.
               const key = threadComposer.openDraftKey();
               return key && threadQueue.editOf(current().threads.open?.id)
                 ? threadComposer.importsEnded(key).then(() => threadQueue.save(key))
-                : threadComposer.send(current().threads, text);
+                : threadComposer.send(current().threads, text, key, deliveryMode);
             }}
             onStop={() => current().threads.onStop()}
             onOpenLink={(url) => void openExternalMessageUrl(url)}
@@ -313,6 +314,10 @@ export function ConversationThread() {
             onCopyMessage={(message) => void copyMessage(message)}
             copiedMessageId={copiedMessageId()}
             compactMessageActions={compactMessageActions()}
+            onMarkUnread={current().threads.onMarkUnread}
+            canMarkUnread={isIncomingAgentMessage}
+            onReactMessage={current().threads.onReactMessage}
+            sendToChannel={threadSendToChannel}
             onBranch={branch(current().threads)}
             onDeleteMessage={deleteMessage(current().threads)}
             canDeleteMessage={props.canDeleteMessage}

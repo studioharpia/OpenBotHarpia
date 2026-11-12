@@ -6,6 +6,7 @@ import { BrowserDockSurface } from "./features/browser/BrowserDockSurface";
 import { ComputerUseHighlightSurface } from "./features/computer-use/ComputerUseHighlightSurface";
 import { ComputerUsePermissionHelp, permissionFromQuery } from "./features/computer-use/ComputerUsePermissionHelp";
 import { DynamicIslandSurface } from "./features/dynamic-island/DynamicIslandSurface";
+import { PromptTemplatesProvider } from "./features/templates/templates-context";
 import { I18nProvider } from "./i18n-context";
 import { syncLogoColor } from "./logo-color";
 import "./styles.css";
@@ -42,13 +43,17 @@ render(() => {
   if (surface === "browser-dock")
     return (
       <I18nProvider waitForLanguage>
-        <BrowserDockSurface />
+        <PromptTemplatesProvider>
+          <BrowserDockSurface />
+        </PromptTemplatesProvider>
       </I18nProvider>
     );
   if (surface === "agent-dock")
     return (
       <I18nProvider waitForLanguage>
-        <AgentDockSurface />
+        <PromptTemplatesProvider>
+          <AgentDockSurface />
+        </PromptTemplatesProvider>
       </I18nProvider>
     );
   if (surface === "computer-use-highlight")

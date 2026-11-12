@@ -504,15 +504,32 @@
    fill and on a moving tab. */
 .agent-threads-tab[data-attention],
 .agent-threads-switcher[data-attention],
-.side-panel-thread-tab[data-attention] {
+.side-panel-thread-tab[data-attention],
+.sidebar-agent-thread-button.ui-button[data-attention],
+.sidebar .agent-row.ui-button[data-attention],
+.tasks-page-row.ui-button[data-attention] {
   background-image: linear-gradient(var(--agent-threads-tint), var(--agent-threads-tint));
 }
 
-:is(.agent-threads-tab, .agent-threads-switcher, .side-panel-thread-tab)[data-attention="waiting"] {
+:is(
+  .agent-threads-tab,
+  .agent-threads-switcher,
+  .side-panel-thread-tab,
+  .sidebar-agent-thread-button,
+  .agent-row,
+  .tasks-page-row
+)[data-attention="waiting"] {
   --agent-threads-tint: color-mix(in srgb, var(--openbot-warning-soft) 40%, var(--openbot-transparent));
 }
 
-:is(.agent-threads-tab, .agent-threads-switcher, .side-panel-thread-tab)[data-attention="failed"] {
+:is(
+  .agent-threads-tab,
+  .agent-threads-switcher,
+  .side-panel-thread-tab,
+  .sidebar-agent-thread-button,
+  .agent-row,
+  .tasks-page-row
+)[data-attention="failed"] {
   --agent-threads-tint: color-mix(in srgb, var(--openbot-danger-soft) 40%, var(--openbot-transparent));
 }
 
@@ -750,4 +767,8 @@
   .agent-threads-tab-mark-slot {
     transition: none;
   }
+}
+
+.agent-threads-placement {
+  flex: none;
 }

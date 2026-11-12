@@ -1,6 +1,6 @@
 /*
- * The side panel: a row of tabs in the top row, above the open pane. The panes keep their own
- * position and width; in the dock they start under the tab row.
+ * The side panel: a row of tabs in the top row, above the open pane. The dock owns one width for every pane;
+ * panes start under the tab row.
  */
 .side-panel-header {
   position: absolute;
@@ -274,6 +274,313 @@
   gap: var(--openbot-space-3);
 }
 
+.agent-central-content {
+  display: grid;
+  gap: var(--openbot-space-6);
+  container: agent-central / inline-size;
+}
+
+.agent-central-content p {
+  margin: var(--openbot-space-2) var(--openbot-space-1);
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-sm);
+}
+
+.agent-central-profile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "avatar identity settings";
+  align-items: center;
+  gap: var(--openbot-space-3);
+  padding-block: var(--openbot-space-1) var(--openbot-space-4);
+  border-bottom: 1px solid var(--openbot-border);
+}
+
+.agent-central-avatar-button {
+  grid-area: avatar;
+  padding: 0;
+  width: auto;
+  height: auto;
+  border-radius: var(--openbot-radius-lg);
+}
+
+.agent-central-profile .agent-central-avatar {
+  width: calc(var(--openbot-space-8) + var(--openbot-space-2));
+  height: calc(var(--openbot-space-8) + var(--openbot-space-2));
+  flex: none;
+}
+
+.agent-central-identity {
+  grid-area: identity;
+  min-width: 0;
+}
+
+.agent-central-identity h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--openbot-text-primary);
+  font-size: var(--openbot-text-xl);
+  font-weight: var(--openbot-weight-semibold);
+  line-height: var(--openbot-leading-xl);
+}
+
+.agent-central-name-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--openbot-space-2);
+}
+
+.agent-central-profile .agent-central-identity p {
+  margin: var(--openbot-space-0-5) 0 0;
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-sm);
+  line-height: var(--openbot-leading-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-central-status {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 55%;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--openbot-space-1-5);
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-sm);
+  line-height: var(--openbot-leading-sm);
+}
+
+.agent-central-status > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-central-status-dot {
+  width: var(--openbot-space-1-5);
+  height: var(--openbot-space-1-5);
+  flex: none;
+  border-radius: var(--openbot-radius-pill);
+  background: currentColor;
+}
+
+.agent-central-status[data-state="ready"] .agent-central-status-dot {
+  color: var(--openbot-success);
+}
+
+.agent-central-status[data-state="working"] .agent-central-status-dot {
+  color: var(--openbot-accent);
+}
+
+.agent-central-status[data-state="waiting"] .agent-central-status-dot {
+  color: var(--openbot-warning);
+}
+
+.agent-central-profile-settings {
+  grid-area: settings;
+  align-self: center;
+  color: var(--openbot-text-muted);
+}
+
+.agent-central-usage,
+.agent-central-tasks {
+  display: grid;
+  min-width: 0;
+  gap: var(--openbot-space-2);
+}
+
+.agent-central-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--openbot-space-2);
+}
+
+.agent-central-section-header h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--openbot-space-2);
+  margin: 0;
+  color: var(--openbot-text-primary);
+  font-size: var(--openbot-text-lg);
+  font-weight: var(--openbot-weight-semibold);
+}
+
+.agent-central-section-header span {
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-sm);
+  font-weight: var(--openbot-weight-regular);
+}
+
+.agent-central-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--openbot-space-3);
+  margin: var(--openbot-space-2) 0 0;
+}
+
+.agent-central-metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: var(--openbot-space-3);
+  border: 1px solid var(--openbot-border);
+  border-radius: var(--openbot-radius-md);
+}
+
+/* Same label/value hierarchy as Usage totals, with no card surface. */
+.agent-central-metric dt {
+  margin-bottom: var(--openbot-space-1);
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-sm);
+  line-height: var(--openbot-leading-sm);
+  overflow-wrap: anywhere;
+}
+
+.agent-central-metric dd {
+  margin: 0;
+  color: var(--openbot-text-primary);
+  font-size: var(--openbot-text-xl);
+  font-weight: var(--openbot-weight-regular);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--openbot-leading-xl);
+  white-space: nowrap;
+}
+
+.agent-central-heatmap {
+  --openbot-accent: var(--openbot-felt-amber-top);
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-central-heatmap .profile-heat-cell[data-empty] {
+  background: color-mix(in srgb, var(--openbot-text-primary) 7%, var(--openbot-transparent));
+}
+
+.agent-central-period-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--openbot-space-2);
+}
+
+.agent-central-tasks {
+  gap: var(--openbot-space-4);
+}
+
+.agent-central-task-group {
+  display: grid;
+  min-width: 0;
+  gap: var(--openbot-space-1);
+}
+
+.agent-central-task-group h4 {
+  margin: 0;
+}
+
+.agent-central-group-toggle.ui-button {
+  background: transparent;
+  width: 100%;
+  justify-content: flex-start;
+  gap: var(--openbot-space-2);
+  padding-inline: var(--openbot-space-1);
+  color: var(--openbot-text-secondary);
+  font-size: var(--openbot-text-lg);
+  font-weight: var(--openbot-weight-medium);
+}
+
+.agent-central-group-toggle.ui-button:hover {
+  background: var(--openbot-bg-control-hover);
+}
+
+.agent-central-group-chevron {
+  width: var(--openbot-icon-sm);
+  height: var(--openbot-icon-sm);
+  flex: none;
+  transition: transform var(--openbot-duration-fast) var(--openbot-ease-out);
+}
+
+.agent-central-group-toggle[aria-expanded="false"] .agent-central-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.agent-central-group-toggle[aria-expanded="false"]:dir(rtl) .agent-central-group-chevron {
+  transform: rotate(90deg);
+}
+
+.agent-central-group-count {
+  margin-inline-start: auto;
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-sm);
+  font-weight: var(--openbot-weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-central-task-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-central-task-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--openbot-space-1);
+  padding: var(--openbot-space-0-5) var(--openbot-space-2);
+  border-radius: var(--openbot-radius-md);
+}
+
+.agent-central-task-row:hover {
+  background: var(--openbot-bg-control-hover);
+}
+
+.agent-central-task-row > .agent-central-task-main.ui-button[aria-pressed] {
+  background: transparent;
+  width: auto;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  padding-inline: 0;
+}
+
+.agent-central-task-date {
+  flex: none;
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-sm);
+  font-weight: var(--openbot-weight-regular);
+  line-height: var(--openbot-leading-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.agent-central-task-actions {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  color: var(--openbot-text-muted);
+}
+
+.agent-central-task-actions.ui-button:not(:hover) {
+  background: transparent;
+}
+
+.agent-central-task-row > input {
+  margin-block: var(--openbot-space-0-5);
+}
+
 /* A maximized dock covers the chat and its header. */
 .side-panel-maximized > :is(.browser-panel, .settings-panel, .side-panel-header) {
   width: 100%;
@@ -442,4 +749,60 @@
   .side-panel-file-tab {
     transition: none;
   }
+}
+
+/* The dock owns resizing, including panes without a private handle (such as a task chat). */
+.side-panel-docked > :is(.browser-panel, .settings-panel) .right-panel-resizer {
+  display: none;
+}
+
+.side-panel-docked > .side-panel-resizer {
+  z-index: 17;
+  inset-inline-start: auto;
+  inset-inline-end: var(--side-panel-width);
+  transform: translateX(50%);
+}
+
+.side-panel-resizer:dir(rtl) {
+  transform: translateX(-50%);
+}
+
+.agent-central-month-select {
+  flex: none;
+  width: auto;
+}
+
+.agent-central-month-select .ui-select-trigger {
+  width: auto;
+  min-width: 0;
+}
+
+@container agent-central (max-width: 460px) {
+  .agent-central-metric dt {
+    min-height: calc(var(--openbot-leading-sm) * 2);
+  }
+}
+
+/* Task transfer reuses the rendered row; this inert copy never becomes a control or a drop target. */
+[data-task-transfer-source] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.task-transfer-drag-preview {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.9;
+  background: var(--openbot-bg-control);
+  color: var(--openbot-text-primary);
+  border: 1px solid var(--openbot-border);
+  border-radius: var(--openbot-radius-md);
+  box-shadow: var(--openbot-shadow-overlay);
+}
+[data-task-transfer-active] {
+  outline: 1px solid var(--openbot-accent);
+  outline-offset: 0;
+  background: var(--openbot-bg-control-hover);
 }

@@ -2,6 +2,28 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/conversation";
 
 export const messages = {
+  "conversation.threads.error.transfer": "No se pudo mover la tarea.",
+
+  "conversation.sidePanel.pane.central": "Central del agente",
+  "conversation.central.mainChat": "Conversación principal",
+  "conversation.central.overview": "Resumen",
+  "conversation.central.currentMonth": "Mes actual",
+  "conversation.central.previousMonth": "Mes anterior",
+  "conversation.central.tokens": "Tokens usados",
+  "conversation.central.finishedTasks": "Tareas finalizadas",
+  "conversation.central.finishedHint":
+    "Cada tarea se cuenta una vez, según su primera finalización correcta. Incluye las archivadas.",
+  "conversation.central.completedTasks": "Completadas",
+  "conversation.central.inProgressTasks": "En curso",
+  "conversation.central.emptySection": "No hay tareas en esta sección.",
+  "conversation.central.statusRunning": "En ejecución",
+  "conversation.central.statusStarting": "Conectando",
+  "conversation.central.statusReady": "Disponible",
+  "conversation.central.statusUnavailable": "No disponible",
+  "conversation.central.activity": "Actividad de tokens",
+  "conversation.central.archivedTasks": "Archivadas",
+  "conversation.central.newTask": "Nueva tarea",
+  "conversation.central.taskActions": "Acciones de {title}",
   "conversation.globalSearch.title": "Buscar en OpenBot",
   "conversation.globalSearch.filter": "Filtrar resultados",
   "conversation.globalSearch.tab.all": "Todo",
@@ -63,6 +85,8 @@ export const messages = {
   "conversation.sidePanel.pane.browser": "Navegador",
   "conversation.sidePanel.pane.files": "Archivos",
   "conversation.threads.new": "Nuevo hilo",
+  "conversation.threads.showSidebar": "Mostrar tareas en la barra lateral",
+  "conversation.threads.showTopbar": "Mostrar tareas en la barra superior",
   "conversation.threads.all": "Todos los hilos",
   "conversation.threads.open": "Hilos abiertos",
   "conversation.threads.current": "Hilo: {title}",

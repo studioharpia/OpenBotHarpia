@@ -35,6 +35,7 @@ export interface RichMessageTextProps {
    * message names; it opens in the workspace when the joined path does not.
    */
   onOpenSharedFile?: ((path: string, asWritten?: string) => void) | undefined;
+  onRevealLocalFile?: ((path: string, kind: "shared" | "workspace") => void) | undefined;
   onOpenWorkspaceFile?: ((path: string, asWritten?: string) => void) | undefined;
   /** Shows the passage that a quote tag names. Without it, a quote is a chip that does nothing. */
   onOpenQuote?: ((messageId: string, text: string) => void) | undefined;

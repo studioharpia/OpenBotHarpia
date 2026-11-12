@@ -2,6 +2,13 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "Indica el ID de la tarea y el ID del agente de destino.",
+  "error.backend.taskTransferFailed": "OpenBot no pudo transferir la tarea. Inténtalo de nuevo.",
+  "error.backend.taskTransferOwnChatOnly":
+    "Transfiere tareas desde tu chat principal, no desde un canal, una conversación externa u otra tarea.",
+  "error.backend.threadTransferBusy": "Esta tarea tiene trabajo en curso o pendiente y aún no se puede mover.",
+  "error.backend.threadTransferRoutine": "Las tareas vinculadas a rutinas no se pueden mover a otro agente.",
+
   "error.backend.eventsUnavailable": "Los eventos no están disponibles en este host.",
   "error.backend.databaseIntegrity": "La base de datos de OpenBot no superó la comprobación de integridad.",
   "error.backend.webhookRouteLimit": "Un host puede tener un máximo de {limit} rutinas de webhook.",
@@ -396,6 +403,8 @@ export const messages = {
   "error.backend.taskTitleRequired": "Dale a la tarea un título corto.",
   "error.backend.taskToolInvalid":
     "Dale a la tarea un título de 120 caracteres como máximo y una descripción que diga qué hay que hacer.",
+  "error.backend.taskRenameInvalid": "Indica el ID de la tarea y un título de hasta 120 caracteres.",
+  "error.backend.taskRenameFailed": "OpenBot no pudo renombrar la tarea. Inténtalo de nuevo.",
   "error.backend.taskOwnChatOnly":
     "Inicia una tarea solo desde tu propio chat. Un canal, una conversación de mensajería u otra tarea no pueden iniciarla.",
   "error.backend.taskUnfinishedLimit":

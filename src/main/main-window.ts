@@ -279,7 +279,8 @@ export function createMainWindowController({
           testClientEnabled: developmentTestClientEnabled,
         })
       ) {
-        window.show();
+        if (!app.isPackaged && process.env.OPENBOT_DEV_BACKGROUND === "1") window.showInactive();
+        else window.show();
       }
     });
     window.on("close", (event) => {
@@ -383,8 +384,11 @@ export function createMainWindowController({
     const existing = chatWindows.get(key)?.window;
     if (existing && !existing.isDestroyed()) {
       if (existing.isMinimized()) existing.restore();
-      existing.show();
-      existing.focus();
+      if (!app.isPackaged && process.env.OPENBOT_DEV_BACKGROUND === "1") existing.showInactive();
+      else {
+        existing.show();
+        existing.focus();
+      }
       return;
     }
     const window = new BrowserWindow({
@@ -412,7 +416,10 @@ export function createMainWindowController({
     hideMenuBar(window);
     followWindowGlass(window, MAIN_WINDOW_DARK_BACKGROUND);
     chatWindows.set(key, { target: { serverId: target.serverId, agentId: target.agentId }, window });
-    window.once("ready-to-show", () => window.show());
+    window.once("ready-to-show", () => {
+      if (!app.isPackaged && process.env.OPENBOT_DEV_BACKGROUND === "1") window.showInactive();
+      else window.show();
+    });
     window.on("closed", () => {
       if (chatWindows.get(key)?.window === window) chatWindows.delete(key);
       announceChatWindows();
@@ -947,6 +954,10 @@ export function hideWindowsForQuit(): void {
 
 export function showMainWindow(window: BrowserWindow): void {
   if (windowsKeptHidden) return;
+  if (!app.isPackaged && process.env.OPENBOT_DEV_BACKGROUND === "1") {
+    window.showInactive();
+    return;
+  }
   presentMainWindow(window, process.platform, () => app.show());
 }
 

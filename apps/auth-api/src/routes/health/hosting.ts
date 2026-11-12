@@ -1,10 +1,9 @@
-import { env } from "cloudflare:workers";
 import { createFileRoute } from "@tanstack/solid-router";
 import { Effect } from "effect";
 import { BoatClient } from "../../server/boat-client";
 import { runApiResponse } from "../../server/effect-runtime";
 import { apiError } from "../../server/request-auth";
-import { requireWorkerBindings } from "../../server/types";
+import { accountRequestBindings } from "../../server/request-context";
 
 /**
  * A sandbox ID that does not exist. A 404 for it shows that boat answers and accepts the key,
@@ -43,7 +42,7 @@ export const Route = createFileRoute("/health/hosting")({
               : undefined;
             if (cached) return cached;
 
-            const apiKey = requireWorkerBindings(env).BOAT_API_KEY?.trim();
+            const apiKey = accountRequestBindings().BOAT_API_KEY?.trim();
             const healthy = apiKey
               ? yield* new BoatClient({ apiKey }).getSandbox(PROBE_SANDBOX_ID).pipe(
                   Effect.as(true),

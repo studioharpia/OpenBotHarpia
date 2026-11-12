@@ -14,7 +14,7 @@ import { toAgentMessages } from "../../app-message-projection";
 import { useCompactMessageActions } from "../../compact-message-actions-preference";
 import { usePlatform } from "../../platform";
 import { deviceQuoteShortcut } from "../../send-shortcut-preference";
-import { latestVisibleAgentMessageId } from "./conversation-read-state";
+import { isIncomingAgentMessage, latestVisibleAgentMessageId } from "./conversation-read-state";
 import { useConversationViewScope } from "./conversation-scope";
 import type { SideThread } from "./conversation-types";
 import { useThreadMcpSignInCard } from "./McpSignInChatCard";
@@ -43,6 +43,7 @@ export function ConversationSideThread(props: { threadId: string }) {
     movePanelThreadToChat,
     copyMessage,
     copiedMessageId,
+    threadSendToChannel,
     branchThread,
   } = useConversationViewScope();
   const { t, errorMessage } = useText();
@@ -78,11 +79,12 @@ export function ConversationSideThread(props: { threadId: string }) {
   // The person reads the thread in the side panel while the window has focus.
   createEffect(
     () => ({
+      task: appFocused() && !view.workspaceCovered && thread()?.conversation ? thread()?.task : null,
       messageId: appFocused() ? latestVisibleAgentMessageId(messages) : null,
       read: thread()?.onRead,
     }),
-    ({ messageId, read }) => {
-      if (messageId && read) read(messageId);
+    ({ task, messageId, read }) => {
+      if (task && read) read(messageId);
     },
   );
   const draftKey = () => threadComposer.sideDraftKey(props.threadId);
@@ -95,13 +97,13 @@ export function ConversationSideThread(props: { threadId: string }) {
     return key ? threadComposer.draft(key) : undefined;
   };
   /** Sends the draft of this thread. Without its key, a send would take the draft of the chat's thread. */
-  function sendSide(side: SideThread, text: string): Promise<boolean> {
+  function sendSide(side: SideThread, text: string, deliveryMode?: "queue" | "steer"): Promise<boolean> {
     const key = draftKey();
     if (!key) return Promise.resolve(false);
     // While a queued message is in the message box, Send saves it in its place.
     return threadQueue.editOf(side.task.id)
       ? threadComposer.importsEnded(key).then(() => threadQueue.save(key))
-      : threadComposer.send(side, text, key);
+      : threadComposer.send(side, text, key, deliveryMode);
   }
   /** The thread waits for an answer to a question or a takeover, which the chat tab of the thread shows. */
   const waitsForAnswer = () => {
@@ -188,7 +190,7 @@ export function ConversationSideThread(props: { threadId: string }) {
             }
             mediaSource={view.runtime?.attachmentMedia}
             downloads={attachmentDownloads}
-            onSend={(text) => sendSide(current().thread, text)}
+            onSend={(text, deliveryMode) => sendSide(current().thread, text, deliveryMode)}
             onStop={() => current().thread.onStop()}
             onOpenLink={(url) => void openExternalMessageUrl(url)}
             onSelectAgent={view.onSelectAgent}
@@ -211,6 +213,10 @@ export function ConversationSideThread(props: { threadId: string }) {
             onCopyMessage={(message) => void copyMessage(message)}
             copiedMessageId={copiedMessageId()}
             compactMessageActions={compactMessageActions()}
+            onMarkUnread={current().thread.onMarkUnread}
+            canMarkUnread={isIncomingAgentMessage}
+            onReactMessage={current().thread.onReactMessage}
+            sendToChannel={threadSendToChannel}
             onBranch={branch()}
             onDeleteMessage={deleteMessage()}
             canDeleteMessage={view.canDeleteMessage}

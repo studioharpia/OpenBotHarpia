@@ -2,11 +2,10 @@ import { createSignal, For, lazy, onSettled, Show } from "solid-js";
 import { articleGradient, articleGradientCss } from "../../lib/article-gradient";
 import { articleArtPath } from "../../lib/content-collection";
 import { NEWS_COLLECTION } from "../../lib/news";
+import { loadClientAgentAvatar } from "../client-agent-avatar";
 
 // Loaded in the browser, as in `FeaturesSection`: the avatar engine does not run in the Worker.
-const AgentAvatar = lazy(() =>
-  import("@openbot/ui/features/agents/AgentAvatar").then((module) => ({ default: module.AgentAvatar })),
-);
+const AgentAvatar = lazy(loadClientAgentAvatar);
 
 const ART_SLUGS = new Set([
   "introducing-openbot",

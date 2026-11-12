@@ -1,4 +1,5 @@
 import type { AppInfo } from "@openbot/contracts/ipc";
+import type { ThreadPlacement } from "@openbot/ui/features/conversation/threads/thread-types";
 import type { ServerView } from "@openbot/ui/features/servers/ServerMenu";
 import type { SidebarView } from "@openbot/ui/features/sidebar/sidebar-types";
 import { PAGE_RAIL_PINNABLE_PAGES, type PageRailPinnablePage } from "@openbot/ui/features/window/PageRail";
@@ -109,6 +110,15 @@ const Layout = createSimpleContext({
     const [sidebarView, setSidebarViewSignal] = createSignal<SidebarView>(
       window.localStorage.getItem(SIDEBAR_VIEW_STORAGE_KEY) === "routines" ? "routines" : "agents",
     );
+    const [threadPlacement, setThreadPlacementSignal] = createSignal<ThreadPlacement>(
+      window.localStorage.getItem("openbot:thread-placement") === "sidebar" ? "sidebar" : "topbar",
+    );
+    const [compactAgentRows, setCompactAgentRowsSignal] = createSignal(
+      window.localStorage.getItem("openbot:compact-agent-rows") === "true",
+    );
+    const [unreadOnly, setUnreadOnlySignal] = createSignal(
+      window.localStorage.getItem("openbot:sidebar-unread-only") === "true",
+    );
     const [railPinChoices, setRailPinChoices] = createSignal<RailPinChoices>(readRailPinChoices());
     const railPinned = createMemo(() => {
       const choices = railPinChoices();
@@ -144,7 +154,16 @@ const Layout = createSimpleContext({
 
     // Another window or browser tab can change the pins.
     function readRailPinsFromStorage(event: StorageEvent): void {
+      if (event.key === null || event.key === "openbot:compact-agent-rows")
+        setCompactAgentRowsSignal(window.localStorage.getItem("openbot:compact-agent-rows") === "true");
+      if (event.key === null || event.key === "openbot:sidebar-unread-only")
+        setUnreadOnlySignal(window.localStorage.getItem("openbot:sidebar-unread-only") === "true");
       if (event.key === null || event.key === RAIL_PINS_STORAGE_KEY) setRailPinChoices(readRailPinChoices());
+      if (event.key === null || event.key === "openbot:thread-placement") {
+        setThreadPlacementSignal(
+          window.localStorage.getItem("openbot:thread-placement") === "sidebar" ? "sidebar" : "topbar",
+        );
+      }
     }
 
     onSettled(() => {
@@ -165,6 +184,29 @@ const Layout = createSimpleContext({
     function setSidebarView(view: SidebarView): void {
       setSidebarViewSignal(view);
       window.localStorage.setItem(SIDEBAR_VIEW_STORAGE_KEY, view);
+    }
+
+    function setThreadPlacement(placement: ThreadPlacement): void {
+      setThreadPlacementSignal(placement);
+      window.localStorage.setItem("openbot:thread-placement", placement);
+    }
+
+    function setCompactAgentRows(compact: boolean): void {
+      setCompactAgentRowsSignal(compact);
+      try {
+        window.localStorage.setItem("openbot:compact-agent-rows", String(compact));
+      } catch {
+        // An unavailable store keeps the preference for this window.
+      }
+    }
+
+    function setUnreadOnly(enabled: boolean): void {
+      setUnreadOnlySignal(enabled);
+      try {
+        window.localStorage.setItem("openbot:sidebar-unread-only", String(enabled));
+      } catch {
+        // An unavailable store keeps the preference for this window.
+      }
     }
 
     function setRailPinned(page: PageRailPinnablePage, pinned: boolean): void {
@@ -192,6 +234,12 @@ const Layout = createSimpleContext({
       serverView,
       setServerView,
       serverRailVisible,
+      threadPlacement,
+      setThreadPlacement,
+      unreadOnly,
+      setUnreadOnly,
+      compactAgentRows,
+      setCompactAgentRows,
       sidebarView,
       setSidebarView,
       railPinned,

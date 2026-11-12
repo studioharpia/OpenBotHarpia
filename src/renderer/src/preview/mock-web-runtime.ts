@@ -83,11 +83,12 @@ export function mockWebRuntimeFor(mock: MockOpenBotControls, events: WebRuntimeE
         : agent.deleteChannelMessage({ channelId: input.channelId, messageId: input.messageId }),
     // The preview host is not a hosted server.
     focusUse: async () => undefined,
-    send: async (agentId, text, attachmentDraftIds, replyToMessageId, clientMessageId) => {
+    send: async (agentId, text, attachmentDraftIds, replyToMessageId, clientMessageId, delivery) => {
       const receipt = await agent.sendMessage({
         agentId,
         text,
         attachmentDraftIds,
+        ...delivery,
         ...(replyToMessageId ? { replyToMessageId } : {}),
         ...(clientMessageId ? { clientMessageId } : {}),
       });

@@ -24,6 +24,7 @@ import type {
   HostStatus,
   InviteSummary,
   MarkAgentTaskReadInput,
+  MarkAgentTaskUnreadInput,
   MarkConversationReadInput,
   MarkConversationUnreadInput,
   MarkDirectReadInput,
@@ -33,6 +34,7 @@ import type {
   RemoteDesktopIceServer,
   RemoteDesktopSetupAction,
   SendDirectMessageInput,
+  SetAgentTaskMessageReactionInput,
   SetTeamTypingInput,
   TeamMemberSummary,
   TeamPresenceSnapshot,
@@ -158,7 +160,16 @@ interface HostServiceOptions {
   appVersion: string;
   store: TeamStore;
   agents: ForwardedApiOptions["agents"] &
-    Pick<AgentService, "adoptConversationReads" | "branchTask" | "listTaskReads" | "markTaskRead" | "readTask">;
+    Pick<
+      AgentService,
+      | "adoptConversationReads"
+      | "branchTask"
+      | "listTaskReads"
+      | "markTaskRead"
+      | "markTaskUnread"
+      | "setTaskMessageReaction"
+      | "readTask"
+    >;
   agentsReady: NonNullable<ForwardedApiOptions["agentsReady"]>;
   skills: NonNullable<ForwardedApiOptions["skills"]>;
   sidebarLayout: NonNullable<ForwardedApiOptions["sidebarLayout"]>;
@@ -1504,6 +1515,14 @@ export class HostService extends EventEmitter<HostEvents> {
     return this.#options.agents.markTaskRead(input, this.#currentAgentReaderId());
   }
 
+  markAgentTaskUnread(input: MarkAgentTaskUnreadInput): AgentTaskReadState {
+    return this.#options.agents.markTaskUnread(input, this.#currentAgentReaderId());
+  }
+
+  setAgentTaskMessageReaction(input: SetAgentTaskMessageReactionInput) {
+    return this.#options.agents.setTaskMessageReaction(input);
+  }
+
   listDirectThreads(): DirectThreadSummary[] {
     if (!this.#options.store.configured) return [];
     const memberId = this.#findCurrentMemberId();
@@ -1935,11 +1954,6 @@ export class HostService extends EventEmitter<HostEvents> {
         return yield* new RemoteWorkflowError({ cause: new Error(sourceText("error.host.nameBeforePublish")) });
       const remoteInviteApiUrl = this.#remoteInviteApiUrl();
       if (remoteInviteApiUrl && optionalCreateRemoteInvite) {
-        // The account service cannot email links for a self-hosted service.
-        if (input.email && selfHostedApiOrigin(remoteInviteApiUrl))
-          return yield* new RemoteWorkflowError({
-            cause: new Error(sourceText("error.remote.selfHostedInviteNoEmail")),
-          });
         const invite = yield* optionalCreateRemoteInvite(identity.serverId, input);
         // The invitation belongs to the account that asked for it, so it stays on that host
         // and shows up in its invite list. What must not happen is emailing it under the new

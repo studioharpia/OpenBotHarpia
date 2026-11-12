@@ -2,6 +2,28 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/conversation";
 
 export const messages = {
+  "conversation.threads.error.transfer": "작업을 이동하지 못했습니다.",
+
+  "conversation.sidePanel.pane.central": "에이전트 센터",
+  "conversation.central.mainChat": "기본 대화",
+  "conversation.central.overview": "개요",
+  "conversation.central.currentMonth": "이번 달",
+  "conversation.central.previousMonth": "지난달",
+  "conversation.central.tokens": "사용한 토큰",
+  "conversation.central.finishedTasks": "완료한 작업",
+  "conversation.central.finishedHint":
+    "각 작업은 처음 성공적으로 완료된 날짜를 기준으로 한 번만 집계됩니다. 보관된 작업도 포함됩니다.",
+  "conversation.central.completedTasks": "완료됨",
+  "conversation.central.inProgressTasks": "진행 중",
+  "conversation.central.emptySection": "이 섹션에 작업이 없습니다.",
+  "conversation.central.statusRunning": "실행 중",
+  "conversation.central.statusStarting": "연결 중",
+  "conversation.central.statusReady": "사용 가능",
+  "conversation.central.statusUnavailable": "사용 불가",
+  "conversation.central.activity": "토큰 활동",
+  "conversation.central.archivedTasks": "보관된 작업",
+  "conversation.central.newTask": "새 작업",
+  "conversation.central.taskActions": "{title} 작업 메뉴",
   "conversation.globalSearch.title": "OpenBot 검색",
   "conversation.globalSearch.filter": "결과 필터",
   "conversation.globalSearch.tab.all": "전체",
@@ -63,6 +85,8 @@ export const messages = {
   "conversation.sidePanel.pane.browser": "브라우저",
   "conversation.sidePanel.pane.files": "파일",
   "conversation.threads.new": "새 스레드",
+  "conversation.threads.showSidebar": "사이드바에 작업 표시",
+  "conversation.threads.showTopbar": "상단 표시줄에 작업 표시",
   "conversation.threads.all": "모든 스레드",
   "conversation.threads.open": "열려 있는 스레드",
   "conversation.threads.current": "스레드: {title}",

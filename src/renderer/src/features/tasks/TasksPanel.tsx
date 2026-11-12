@@ -60,6 +60,9 @@ export function TasksPanel(props: TasksPanelProps) {
     <TasksView
       {...props}
       source={desktopTasksSource()}
+      onRenameTask={threads.editable() ? (task, title) => tabs.rename(task.agentId, task.id, title) : undefined}
+      onDeleteTask={threads.editable() ? (task) => tabs.remove(task.agentId, task.id) : undefined}
+      hiddenTaskIds={tabs.hidden()}
       agents={agentList()}
       voice={createTasksVoice}
       onOpenLink={(url) => void appPort().openUrl(url)}
@@ -82,7 +85,8 @@ export function TasksPanel(props: TasksPanelProps) {
       }}
       sendShortcut={deviceSendShortcut(platform.appInfo()?.platform)}
       // The thread state reaches the active server, which the page follows.
-      onRead={(input, messageId) => threads.markTaskRead(input.agentId, input.taskId, messageId)}
+      failureRead={threads.failureRead}
+      onRead={(task, messageId) => threads.markTaskRead(task.agentId, task.id, messageId, task)}
       // The page covers the chat, so a failed answer shows as a toast, not in the chat.
       onRespondApproval={(approval, decision) =>
         respondToApprovalRequest(approval.agentId, approval.requestId, decision, {

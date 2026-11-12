@@ -2,6 +2,15 @@ import type { PartialTranslation } from "../../../message";
 import type { messages as source } from "../../en/error/backend";
 
 export const messages = {
+  "error.backend.taskTransferInvalid": "Indiquez l’identifiant de la tâche et celui de l’agent destinataire.",
+  "error.backend.taskTransferFailed": "OpenBot n’a pas pu transférer la tâche. Réessayez.",
+  "error.backend.taskTransferOwnChatOnly":
+    "Transférez les tâches depuis votre propre chat, pas depuis un canal, une conversation externe ou une autre tâche.",
+  "error.backend.threadTransferBusy":
+    "Cette tâche a du travail en cours ou en attente et ne peut pas encore être déplacée.",
+  "error.backend.threadTransferRoutine":
+    "Les tâches liées à des routines ne peuvent pas être déplacées vers un autre agent.",
+
   "error.backend.eventsUnavailable": "Les événements ne sont pas disponibles sur cet hôte.",
   "error.backend.databaseIntegrity": "La base de données OpenBot a échoué à la vérification d’intégrité.",
   "error.backend.webhookRouteLimit": "Un hôte peut avoir au plus {limit} routines webhook.",
@@ -405,6 +414,8 @@ export const messages = {
   "error.backend.taskTitleRequired": "Donnez un titre court à la tâche.",
   "error.backend.taskToolInvalid":
     "Donnez à la tâche un titre de 120 caractères au plus et des consignes qui disent quoi faire.",
+  "error.backend.taskRenameInvalid": "Indiquez l’identifiant de la tâche et un titre de 120 caractères maximum.",
+  "error.backend.taskRenameFailed": "OpenBot n’a pas pu renommer la tâche. Réessayez.",
   "error.backend.taskOwnChatOnly":
     "Lancez une tâche uniquement depuis votre propre discussion. Un canal, une conversation de messagerie ou une autre tâche ne peut pas en lancer.",
   "error.backend.taskUnfinishedLimit":

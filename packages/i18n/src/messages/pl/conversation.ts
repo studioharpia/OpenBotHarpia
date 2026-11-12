@@ -2,6 +2,28 @@ import type { PartialTranslation } from "../../message";
 import type { messages as source } from "../en/conversation";
 
 export const messages = {
+  "conversation.threads.error.transfer": "Nie udało się przenieść zadania.",
+
+  "conversation.sidePanel.pane.central": "Centrum agenta",
+  "conversation.central.mainChat": "Główna rozmowa",
+  "conversation.central.overview": "Przegląd",
+  "conversation.central.currentMonth": "Bieżący miesiąc",
+  "conversation.central.previousMonth": "Poprzedni miesiąc",
+  "conversation.central.tokens": "Użyte tokeny",
+  "conversation.central.finishedTasks": "Ukończone zadania",
+  "conversation.central.finishedHint":
+    "Zadania są liczone raz, według daty pierwszego pomyślnego ukończenia. Obejmuje zadania zarchiwizowane.",
+  "conversation.central.completedTasks": "Ukończone",
+  "conversation.central.inProgressTasks": "W toku",
+  "conversation.central.emptySection": "Brak zadań w tej sekcji.",
+  "conversation.central.statusRunning": "W trakcie pracy",
+  "conversation.central.statusStarting": "Łączenie",
+  "conversation.central.statusReady": "Dostępny",
+  "conversation.central.statusUnavailable": "Niedostępny",
+  "conversation.central.activity": "Aktywność tokenów",
+  "conversation.central.archivedTasks": "Archiwum",
+  "conversation.central.newTask": "Nowe zadanie",
+  "conversation.central.taskActions": "Działania dla {title}",
   "conversation.globalSearch.title": "Szukaj w OpenBot",
   "conversation.globalSearch.filter": "Filtruj wyniki",
   "conversation.globalSearch.tab.all": "Wszystko",
@@ -63,6 +85,8 @@ export const messages = {
   "conversation.sidePanel.pane.browser": "Przeglądarka",
   "conversation.sidePanel.pane.files": "Pliki",
   "conversation.threads.new": "Nowy wątek",
+  "conversation.threads.showSidebar": "Pokaż zadania na pasku bocznym",
+  "conversation.threads.showTopbar": "Pokaż zadania na górnym pasku",
   "conversation.threads.all": "Wszystkie wątki",
   "conversation.threads.open": "Otwarte wątki",
   "conversation.threads.current": "Wątek: {title}",

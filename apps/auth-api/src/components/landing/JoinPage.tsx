@@ -1,6 +1,11 @@
 import { AppLogo } from "@openbot/brand";
-import { createWebAppInvitePath, OPENBOT_INVITE_ORIGIN, toOpenBotInviteUrl } from "@openbot/contracts/invite-links";
-import { createSignal, For, onSettled, Show } from "solid-js";
+import {
+  createWebAppInvitePath,
+  OPENBOT_INVITE_ORIGIN,
+  selfHostedApiOrigin,
+  toOpenBotInviteUrl,
+} from "@openbot/contracts/invite-links";
+import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import { landingAnalytics } from "../../lib/analytics";
 import { detectDownloadPlatform } from "../../lib/download-platforms";
 import { OPENBOT_DOWNLOAD_LINKS } from "../../lib/landing-links";
@@ -9,12 +14,27 @@ import type { JoinLink, JoinPageText } from "../transactional/page-text";
 import { TransactionalPage } from "../transactional/TransactionalPage";
 import { Button } from "../ui/button";
 
-export function JoinPage(props: { lang: string; text: JoinPageText }) {
-  const [openUrl, setOpenUrl] = createSignal("");
-  const [browserUrl, setBrowserUrl] = createSignal("");
+export function JoinPage(props: { lang: string; text: JoinPageText; inviteUrl: string }) {
+  // Resolve both links during SSR too: the invitation must remain usable when the browser
+  // cannot load or run the page's JavaScript. Invalid links render their error immediately.
+  const invite = createMemo(() => {
+    try {
+      const pageUrl = new URL(props.inviteUrl);
+      const inviteLinks = { selfHostedApiOrigin: selfHostedApiOrigin(pageUrl.origin) };
+      const canonicalUrl = new URL(
+        `${pageUrl.pathname}${pageUrl.search}`,
+        inviteLinks.selfHostedApiOrigin ?? OPENBOT_INVITE_ORIGIN,
+      ).toString();
+      return {
+        openUrl: toOpenBotInviteUrl(canonicalUrl, inviteLinks),
+        browserUrl: createWebAppInvitePath(canonicalUrl, inviteLinks),
+      };
+    } catch {
+      return null;
+    }
+  });
   const [downloadUrl, setDownloadUrl] = createSignal<string>(OPENBOT_DOWNLOAD_LINKS.macos);
   const [mobile, setMobile] = createSignal(false);
-  const [invalid, setInvalid] = createSignal(false);
   const fallback = createOpenAppFallback();
 
   onSettled(() => {
@@ -23,23 +43,16 @@ export function JoinPage(props: { lang: string; text: JoinPageText }) {
         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1),
     );
     const platform = detectDownloadPlatform(globalThis.navigator) ?? "macos";
-    let validInvite = true;
-    try {
-      const pageUrl = new URL(window.location.href);
-      const canonicalUrl = new URL(`${pageUrl.pathname}${pageUrl.search}`, OPENBOT_INVITE_ORIGIN);
-      setOpenUrl(toOpenBotInviteUrl(canonicalUrl.toString()));
-      setBrowserUrl(createWebAppInvitePath(canonicalUrl.toString()));
-    } catch {
-      validInvite = false;
-      setInvalid(true);
-    }
     setDownloadUrl(OPENBOT_DOWNLOAD_LINKS[platform]);
-    const cleanup = landingAnalytics.startJoin(document, window.location.hostname, { validInvite, platform });
+    const cleanup = landingAnalytics.startJoin(document, window.location.hostname, {
+      validInvite: invite() !== null,
+      platform,
+    });
     return cleanup;
   });
 
   const noApp = () => (mobile() ? props.text.noAppMobile : props.text.noApp);
-  const linkHref = (link: JoinLink) => (link === "browser" ? browserUrl() : downloadUrl());
+  const linkHref = (link: JoinLink, browserUrl: string) => (link === "browser" ? browserUrl : downloadUrl());
   // The dialog offers the desktop download, which a phone cannot install. Phones get the note below.
   const armFallback = () => {
     if (!mobile()) fallback.arm();
@@ -52,36 +65,32 @@ export function JoinPage(props: { lang: string; text: JoinPageText }) {
       <h1 id="join-title">{props.text.title}</h1>
       <p class="join-card-copy">{props.text.intro}</p>
 
-      <Show when={!invalid()} fallback={<p class="join-card-error">{props.text.invalid}</p>}>
-        <div class="join-card-actions join-card-actions-full">
-          {/* Until the page reads the link, the app cannot open it. The button is then a real
-              disabled button, so it is not a link that goes nowhere. */}
-          <Show
-            when={openUrl()}
-            fallback={
-              <Button as="button" type="button" disabled variant="primary" size="lg" icon="open">
-                {props.text.open}
-              </Button>
-            }
-          >
-            {(href) => (
-              <Button href={href()} variant="primary" size="lg" icon="open" onClick={armFallback}>
-                {props.text.open}
-              </Button>
-            )}
-          </Show>
-        </div>
-        <Show when={browserUrl()}>
-          <p class="join-card-alternatives">
-            <For each={noApp()}>
-              {(part) => (
-                <Show when={part.link} fallback={part.text}>
-                  {(link) => <a href={linkHref(link())}>{part.text}</a>}
-                </Show>
-              )}
-            </For>
+      <Show
+        when={invite()}
+        fallback={
+          <p class="join-card-error" role="alert">
+            {props.text.invalid}
           </p>
-        </Show>
+        }
+      >
+        {(links) => (
+          <>
+            <div class="join-card-actions join-card-actions-full">
+              <Button href={links().openUrl} variant="primary" size="lg" icon="open" onClick={armFallback}>
+                {props.text.open}
+              </Button>
+            </div>
+            <p class="join-card-alternatives">
+              <For each={noApp()}>
+                {(part) => (
+                  <Show when={part.link} fallback={part.text}>
+                    {(link) => <a href={linkHref(link(), links().browserUrl)}>{part.text}</a>}
+                  </Show>
+                )}
+              </For>
+            </p>
+          </>
+        )}
       </Show>
 
       <Show when={mobile()}>

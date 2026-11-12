@@ -5,6 +5,7 @@ import {
   type AgentTaskOutcome,
   type AttachmentSummary,
   type ConversationMessage,
+  type TransferAgentTaskInput,
 } from "@openbot/contracts/ipc";
 import { type DynamicRecord, isDynamicRecord, isOneOf, isString } from "@openbot/contracts/runtime-values";
 import { ORDER_KEY_DESC } from "../database/conversation-queries";
@@ -122,6 +123,13 @@ export class AgentThreadStore {
   taskForThread(threadId: string): AgentThreadRecord | null {
     const row = databaseRow(this.#database.connection.prepare(`${SELECT_THREAD} WHERE thread_id = ?`).get(threadId));
     return row ? decodeThread(row) : null;
+  }
+
+  ownerOfThread(threadId: string): string | null {
+    const row = databaseRow(
+      this.#database.connection.prepare("SELECT agent_id FROM projection_threads WHERE thread_id = ?").get(threadId),
+    );
+    return row ? requiredStringColumn(row, "agent_id") : null;
   }
 
   /** The open threads of this agent first, then the newest archived ones, up to `INPUT_LIMITS.agentTasks`. */
@@ -414,16 +422,16 @@ export class AgentThreadStore {
     return created;
   }
 
-  /** A rename by a person. The title no longer follows the first message. */
-  rename(threadId: string, title: string): void {
+  /** An explicit rename. Keep its author; the title no longer follows the first message. */
+  rename(threadId: string, title: string, titleSource: "user" | "agent" = "user"): void {
     this.#database.dispatch(
       `agent-thread-renamed:${threadId}:${randomUUID()}`,
       [{ aggregateType: "agent-thread", aggregateId: threadId, eventType: "agent-thread.renamed", payload: {} }],
       (db, sequences) => {
         db.prepare(
-          `UPDATE projection_agent_threads SET title = ?, title_source = 'user', last_event_sequence = ?
+          `UPDATE projection_agent_threads SET title = ?, title_source = ?, last_event_sequence = ?
            WHERE thread_id = ?`,
-        ).run(title, sequences[0] ?? 0, threadId);
+        ).run(title, titleSource, sequences[0] ?? 0, threadId);
         return null;
       },
     );
@@ -440,6 +448,37 @@ export class AgentThreadStore {
            WHERE thread_id = ? AND title_source <> 'user'`,
         ).run(title, sequences[0] ?? 0, threadId);
         return null;
+      },
+    );
+  }
+
+  /** Changes the container owner only. Message IDs, dates, turns and reader cursors stay on this thread. */
+  transfer(input: TransferAgentTaskInput, commandId: string): void {
+    const current = this.task(input.taskId);
+    if (!current || current.agentId !== input.agentId) throw new Error("Task ownership changed.");
+    this.#database.dispatch(
+      commandId,
+      [
+        {
+          aggregateType: "agent-thread",
+          aggregateId: current.threadId,
+          eventType: "agent-thread.transferred",
+          payload: { sourceAgentId: input.agentId, targetAgentId: input.targetAgentId },
+        },
+      ],
+      (db, sequences) => {
+        const task = this.task(input.taskId);
+        if (!task || task.agentId !== input.agentId) throw new Error("Task ownership changed.");
+        db.prepare(`UPDATE projection_agent_threads SET agent_id = ?, last_event_sequence = ? WHERE thread_id = ?`).run(
+          input.targetAgentId,
+          sequences[0] ?? 0,
+          task.threadId,
+        );
+        db.prepare("UPDATE projection_threads SET agent_id = ? WHERE thread_id = ?").run(
+          input.targetAgentId,
+          task.threadId,
+        );
+        return true;
       },
     );
   }

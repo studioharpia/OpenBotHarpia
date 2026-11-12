@@ -1179,7 +1179,7 @@ export async function createApplicationServices({
     homedir(),
     new OpenBotDatabase(app.getPath("userData")),
     () => agentDefaults.get(),
-    localServerChild?.agentRoot,
+    localServerChild?.agentRoot ?? join(homedir(), "HarpiaTeam"),
   );
   // Phase marks for `dev:bench`, so a slow start shows which group of awaits it waited on. They
   // change nothing.
@@ -1487,7 +1487,7 @@ export async function createApplicationServices({
     localServerChild?.runtimeRoot ??
     providerRuntimeRoot({
       appData: app.getPath("appData"),
-      userDataOverride: app.commandLine.getSwitchValue("user-data-dir"),
+      userDataOverride: app.getPath("userData"),
     });
   const providerDownloads = join(app.getPath("userData"), "provider-runtimes", ".downloads");
   const hermesInstaller = new HermesInstaller({
@@ -3373,7 +3373,7 @@ export async function createApplicationServices({
       : new LocalServers({
           registryPath: join(app.getPath("userData"), LOCAL_SERVERS_FILE),
           userDataRoot: join(app.getPath("userData"), "local-servers"),
-          agentRoot: join(homedir(), "OpenBot", "Servers"),
+          agentRoot: join(homedir(), "HarpiaTeam", "Servers"),
           runtimeRoot: providerRuntimesRoot,
           cipher: safeStorageCipher("error.app.macSecureStorageUnavailable"),
           remoteServers,
