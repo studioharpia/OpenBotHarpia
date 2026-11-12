@@ -263,8 +263,6 @@ export const messages = {
   "settings.tab.agentDock.description": "选择停靠栏显示的位置，以及其中的智能体。",
   "settings.tab.updates.title": "更新",
   "settings.tab.updates.description": "让这台电脑上的 OpenBot 保持最新。",
-  "settings.tab.billing.title": "账单",
-  "settings.tab.billing.description": "许可证、服务器套餐、支付方式和发票。",
   "settings.tab.hostedServers.title": "托管服务器",
   "settings.tab.hostedServers.description": "创建即使这台电脑关机也能运行的 OpenBot 服务器。",
   "settings.sections.label": "设置分区",

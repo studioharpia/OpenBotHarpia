@@ -270,7 +270,13 @@ function sendResult(exit: Exit.Exit<void, { message: string }>): EmailResult {
 
 function readEmailSenders(bindings: EmailDeliveryBindings): EmailSenders | null {
   const smtp = readSmtpConfig(bindings);
-  return smtp ? { smtp, connector: bindings.EMAIL_SMTP_CONNECTOR, fallback: bindings.EMAIL_FALLBACK ?? null } : null;
+  return smtp
+    ? {
+        smtp,
+        ...(bindings.EMAIL_SMTP_CONNECTOR === undefined ? {} : { connector: bindings.EMAIL_SMTP_CONNECTOR }),
+        fallback: bindings.EMAIL_FALLBACK ?? null,
+      }
+    : null;
 }
 
 function readSmtpConfig(bindings: EmailDeliveryBindings): SmtpEmailConfig | null {

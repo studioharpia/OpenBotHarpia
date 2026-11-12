@@ -261,8 +261,6 @@ export const messages = {
   "settings.tab.agentDock.description": "בחירת מקום הצגת המעגן ואילו סוכנים נמצאים בו.",
   "settings.tab.updates.title": "עדכונים",
   "settings.tab.updates.description": "שמירה על OpenBot מעודכן במחשב הזה.",
-  "settings.tab.billing.title": "חיוב",
-  "settings.tab.billing.description": "רישיון, תוכניות שרת, אמצעי תשלום וחשבוניות.",
   "settings.tab.hostedServers.title": "שרתים מתארחים",
   "settings.tab.hostedServers.description": "יצירת שרתי OpenBot שפועלים כשהמחשב הזה כבוי.",
   "settings.sections.label": "מדורי הגדרות",

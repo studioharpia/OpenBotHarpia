@@ -632,7 +632,7 @@ try {
   );
   report.passed = true;
 } catch (failure) {
-  report.error = failure instanceof Error ? failure.stack : String(failure);
+  report.error = failure instanceof Error ? (failure.stack ?? failure.message) : String(failure);
   process.exitCode = 1;
 } finally {
   await runCauseEffect(service.stop()).catch(() => {});

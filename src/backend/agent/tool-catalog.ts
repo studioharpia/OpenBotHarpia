@@ -127,7 +127,7 @@ function toolDefinitions(catalog: typeof BUILTIN_TOOL_CATALOG) {
     ...OPENBOT_TOOL_DEFINITIONS.filter((tool) => DIRECT_NAMES.has(tool.name)),
     {
       name: "tool_search",
-      description: `Find built-in tools by keywords or qualified name: queries (array) or query. Returns short descriptions, default 5, max 10; the best matches also give inputSchema and guidance. Run found tools with tool_call, not directly. Describe others before use. Catalog: ${names}`,
+      description: `Find built-in tools by keywords or qualified name using queries or query; default 5, max 10. Best matches include schemas/guidance. Run via tool_call, never directly; describe other matches first. Catalog: ${names}`,
       shape: searchShape,
     },
     {

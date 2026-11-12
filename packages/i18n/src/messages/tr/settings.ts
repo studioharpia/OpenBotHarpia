@@ -268,8 +268,6 @@ export const messages = {
   "settings.tab.agentDock.description": "Yuvanın nerede görüneceğini ve hangi ajanların yuvada olacağını seçin.",
   "settings.tab.updates.title": "Güncellemeler",
   "settings.tab.updates.description": "OpenBot'u bu bilgisayarda güncel tutun.",
-  "settings.tab.billing.title": "Faturalandırma",
-  "settings.tab.billing.description": "Lisans, sunucu planları, ödeme yöntemi ve faturalar.",
   "settings.tab.hostedServers.title": "Barındırılan sunucular",
   "settings.tab.hostedServers.description": "Bu bilgisayar kapalıyken çalışan OpenBot sunucuları oluşturun.",
   "settings.sections.label": "Ayar bölümleri",

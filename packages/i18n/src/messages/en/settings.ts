@@ -274,8 +274,6 @@ export const messages = defineMessages("settings", {
   "settings.tab.agentDock.description": "Choose where the dock shows and which agents are on it.",
   "settings.tab.updates.title": "Updates",
   "settings.tab.updates.description": "Keep OpenBot current on this computer.",
-  "settings.tab.billing.title": "Billing",
-  "settings.tab.billing.description": "License, server plans, payment method and invoices.",
   "settings.tab.hostedServers.title": "Hosted servers",
   "settings.tab.hostedServers.description": "Create OpenBot servers that run when this computer is off.",
   "settings.sections.label": "Settings sections",

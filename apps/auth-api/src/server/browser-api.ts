@@ -373,7 +373,7 @@ const handleBrowserOperation = Effect.fn("BrowserApi.handleOperation")(function*
         auth: services.auth,
         remote: services.remote,
         delivery: services.inviteEmailDelivery,
-        inviteLinks: services.inviteLinks,
+        ...(services.inviteLinks === undefined ? {} : { inviteLinks: services.inviteLinks }),
       },
       user,
       body,

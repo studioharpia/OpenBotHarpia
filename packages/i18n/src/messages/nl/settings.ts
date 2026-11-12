@@ -272,8 +272,6 @@ export const messages = {
   "settings.tab.agentDock.description": "Kies waar het dock verschijnt en welke agents erin staan.",
   "settings.tab.updates.title": "Updates",
   "settings.tab.updates.description": "Houd OpenBot op deze computer up-to-date.",
-  "settings.tab.billing.title": "Facturering",
-  "settings.tab.billing.description": "Licentie, serverabonnementen, betaalmethode en facturen.",
   "settings.tab.hostedServers.title": "Gehoste servers",
   "settings.tab.hostedServers.description": "Maak OpenBot-servers die draaien wanneer deze computer uit staat.",
   "settings.sections.label": "Onderdelen van instellingen",

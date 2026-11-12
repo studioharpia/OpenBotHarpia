@@ -67,7 +67,7 @@ export const routineScheduleZodSchema = z
  * that leans on the chat ("check the mail as before") leaves the run without the way to do it.
  */
 export const ROUTINE_INSTRUCTION_RULE =
-  "Each run starts a new session that sees only the newest chat messages, so write an instruction that a reader with no chat can follow. Name the service and the tool to use, such as openbot_browser for a website with the site and its signed-in tab, or the MCP tool or teammate. Also name the account, the steps, what to report and where, and when to report nothing. Do not write 'as before' or refer to the chat.";
+  "Each run starts a new session with only the newest messages. Write a standalone instruction: name service and tool (browser with site/signed-in tab, MCP or teammate), account, steps, reporting destination and conditions, including when to report nothing. Never refer to prior chats or write 'as before'.";
 
 export const routineInstructionZodSchema = z
   .string()

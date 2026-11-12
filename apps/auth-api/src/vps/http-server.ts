@@ -148,7 +148,8 @@ export async function startVpsAccountServer(options: {
   )
     throw new Error("The account public origin must use HTTPS.");
   // Trust operator configuration, never Host headers or an origin supplied in an invitation.
-  options.bindings.ACCOUNT_INVITE_ORIGIN = origin.protocol === "https:" ? origin.origin : undefined;
+  if (origin.protocol === "https:") options.bindings.ACCOUNT_INVITE_ORIGIN = origin.origin;
+  else delete options.bindings.ACCOUNT_INVITE_ORIGIN;
   const assetsDirectory = await realpath(options.assetsDirectory);
   const proxies = new Set(options.trustedProxyIPs ?? []);
   if ([...proxies].some((ip) => !isIP(ip))) throw new Error("Trusted proxies must be explicit IP addresses.");

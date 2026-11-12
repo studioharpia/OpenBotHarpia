@@ -32,11 +32,17 @@ const MultipartOptions = Schema.Struct({
 type ObjectValue = ReadableStream | ArrayBuffer | ArrayBufferView | string | null | Blob;
 
 function storedHttpMetadata(value: typeof HttpMetadata.Type): R2HTTPMetadata {
-  const { cacheExpiry, ...fields } = value;
-  if (cacheExpiry === undefined) return fields;
-  const expiry = new Date(cacheExpiry);
+  const metadata: R2HTTPMetadata = {
+    ...(value.contentType === undefined ? {} : { contentType: value.contentType }),
+    ...(value.contentLanguage === undefined ? {} : { contentLanguage: value.contentLanguage }),
+    ...(value.contentDisposition === undefined ? {} : { contentDisposition: value.contentDisposition }),
+    ...(value.contentEncoding === undefined ? {} : { contentEncoding: value.contentEncoding }),
+    ...(value.cacheControl === undefined ? {} : { cacheControl: value.cacheControl }),
+  };
+  if (value.cacheExpiry === undefined) return metadata;
+  const expiry = new Date(value.cacheExpiry);
   if (Number.isNaN(expiry.getTime())) throw new Error("Invalid stored object expiration.");
-  return { ...fields, cacheExpiry: expiry };
+  return { ...metadata, cacheExpiry: expiry };
 }
 
 async function bytes(value: ObjectValue): Promise<Uint8Array> {
@@ -52,23 +58,30 @@ function metadata(value?: R2HTTPMetadata | Headers): R2HTTPMetadata {
   if (!(value instanceof Headers)) return value ?? {};
   const read = (key: string) => value.get(key) ?? undefined;
   const expires = value.get("Expires");
+  const contentType = read("Content-Type");
+  const contentLanguage = read("Content-Language");
+  const contentDisposition = read("Content-Disposition");
+  const contentEncoding = read("Content-Encoding");
+  const cacheControl = read("Cache-Control");
   return {
-    contentType: read("Content-Type"),
-    contentLanguage: read("Content-Language"),
-    contentDisposition: read("Content-Disposition"),
-    contentEncoding: read("Content-Encoding"),
-    cacheControl: read("Cache-Control"),
+    ...(contentType === undefined ? {} : { contentType }),
+    ...(contentLanguage === undefined ? {} : { contentLanguage }),
+    ...(contentDisposition === undefined ? {} : { contentDisposition }),
+    ...(contentEncoding === undefined ? {} : { contentEncoding }),
+    ...(cacheControl === undefined ? {} : { cacheControl }),
     ...(expires ? { cacheExpiry: new Date(expires) } : {}),
   };
 }
 
 function conditions(value?: R2Conditional | Headers): R2Conditional {
   if (!(value instanceof Headers)) return value ?? {};
+  const etagMatches = value.get("If-Match");
+  const etagDoesNotMatch = value.get("If-None-Match");
   const before = value.get("If-Unmodified-Since");
   const after = value.get("If-Modified-Since");
   return {
-    etagMatches: value.get("If-Match") ?? undefined,
-    etagDoesNotMatch: value.get("If-None-Match") ?? undefined,
+    ...(etagMatches === null ? {} : { etagMatches }),
+    ...(etagDoesNotMatch === null ? {} : { etagDoesNotMatch }),
     ...(before ? { uploadedBefore: new Date(before) } : {}),
     ...(after ? { uploadedAfter: new Date(after) } : {}),
     secondsGranularity: true,
@@ -93,6 +106,7 @@ function matches(row: StoredMetadata | null, value?: R2Conditional | Headers): b
 }
 
 class StoredObject implements R2Object {
+  declare readonly range?: R2Range;
   readonly key: string;
   readonly version: string;
   readonly size: number;
@@ -104,10 +118,8 @@ class StoredObject implements R2Object {
   readonly checksums: R2Checksums;
   readonly storageClass: string;
 
-  constructor(
-    row: StoredMetadata,
-    readonly range?: R2Range,
-  ) {
+  constructor(row: StoredMetadata, range?: R2Range) {
+    if (range !== undefined) this.range = range;
     this.key = row.key;
     this.version = row.version;
     this.size = row.size;
@@ -421,7 +433,7 @@ export class VpsObjectStore implements R2Bucket {
           const result = this.#writeObject(key, Buffer.concat(values), {
             httpMetadata,
             customMetadata,
-            storageClass: raw.storageClass,
+            ...(raw.storageClass === undefined ? {} : { storageClass: raw.storageClass }),
           });
           if (!result) throw new Error("Multipart object could not be completed.");
           this.#database

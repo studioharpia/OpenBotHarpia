@@ -18,7 +18,7 @@ assertMutationAllowed({
   command: "agent-task-transfer-dev-e2e",
   allowMutations: process.argv.includes("--allow-mutations"),
   instanceNamed: Boolean(id),
-  target: id,
+  ...(id === undefined ? {} : { target: id }),
 });
 const connection = await connectToDevApp(
   instance.remoteDebuggingPort,

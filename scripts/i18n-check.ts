@@ -33,6 +33,8 @@ const CODE_EXTENSIONS = /\.(?:ts|tsx)$/;
 const SKIPPED_DIRECTORIES = new Set(["node_modules", "dist", "build", "out", ".expo"]);
 /** Keys that no current code sends, but older hosts still do. Keep them so their text is translated. */
 const RELEASED_SOURCE_KEYS = new Set([
+  // Official and older self-hosted hosts still send this invitation error.
+  "error.remote.selfHostedInviteNoEmail",
   "error.agent.noStartingModel",
   "error.provider.cliBusyUpdate",
   // Hosts before side threads send these for the agent-tasks-v1 routes.

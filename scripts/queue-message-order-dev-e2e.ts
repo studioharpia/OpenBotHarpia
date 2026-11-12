@@ -18,7 +18,7 @@ assertMutationAllowed({
   command: "queue-message-order-dev-e2e",
   allowMutations: process.argv.includes("--allow-mutations"),
   instanceNamed: Boolean(named),
-  target: named,
+  ...(named === undefined ? {} : { target: named }),
 });
 const connection = await connectToDevApp(
   instance.remoteDebuggingPort,
@@ -222,7 +222,7 @@ serveFakeAcpAgent({
   report.stored = history.messages.map((message) => ({
     id: message.id,
     time: message.createdAt,
-    type: message.itemType,
+    ...(message.itemType === undefined ? {} : { type: message.itemType }),
   }));
   checks.push(
     "Reproduzidas as duas inversões no histórico por turnos: plano antes da pergunta mais antiga; imagem do turno seguinte antes do aviso anterior.",

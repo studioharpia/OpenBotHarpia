@@ -83,9 +83,13 @@ async function main(): Promise<void> {
       hostname,
       port,
       assetsDirectory: resolve(root, "dist-vps/client"),
-      trustedProxyIPs: process.env.OPENBOT_AUTH_TRUSTED_PROXY_IPS?.split(",")
-        .map((ip) => ip.trim())
-        .filter(Boolean),
+      ...(process.env.OPENBOT_AUTH_TRUSTED_PROXY_IPS === undefined
+        ? {}
+        : {
+            trustedProxyIPs: process.env.OPENBOT_AUTH_TRUSTED_PROXY_IPS.split(",")
+              .map((ip) => ip.trim())
+              .filter(Boolean),
+          }),
     });
     logger.info("Standalone account service started.", {
       port: server.port,

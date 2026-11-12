@@ -18,7 +18,7 @@ assertMutationAllowed({
   command: "consecutive-media-dev-e2e",
   allowMutations: process.argv.includes("--allow-mutations"),
   instanceNamed: Boolean(named),
-  target: named,
+  ...(named === undefined ? {} : { target: named }),
 });
 const connection = await connectToDevApp(
   instance.remoteDebuggingPort,
@@ -195,7 +195,7 @@ serveFakeAcpAgent({
   assert.equal(new Set(media.map((message) => message.turnId)).size, 1);
   report.messages = media.map((message) => ({
     id: message.id,
-    turnId: message.turnId,
+    ...(message.turnId === undefined ? {} : { turnId: message.turnId }),
     files: message.attachments?.map((file) => file.name) ?? [],
   }));
   checks.push(

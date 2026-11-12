@@ -270,8 +270,6 @@ export const messages = {
   "settings.tab.agentDock.description": "اختر مكان ظهور الشريط والوكلاء الموجودين عليه.",
   "settings.tab.updates.title": "التحديثات",
   "settings.tab.updates.description": "إبقاء OpenBot محدّثًا على هذا الحاسوب.",
-  "settings.tab.billing.title": "الفوترة",
-  "settings.tab.billing.description": "الترخيص وخطط الخوادم وطريقة الدفع والفواتير.",
   "settings.tab.hostedServers.title": "الخوادم المستضافة",
   "settings.tab.hostedServers.description": "أنشئ خوادم OpenBot تعمل عندما يكون هذا الحاسوب مطفأً.",
   "settings.sections.label": "أقسام الإعدادات",

@@ -274,8 +274,6 @@ export const messages = {
   "settings.tab.agentDock.description": "Wybierz, gdzie pokazuje się dok i którzy agenci są w nim.",
   "settings.tab.updates.title": "Aktualizacje",
   "settings.tab.updates.description": "Utrzymuj OpenBot w aktualnej wersji na tym komputerze.",
-  "settings.tab.billing.title": "Rozliczenia",
-  "settings.tab.billing.description": "Licencja, plany serwerów, metoda płatności i faktury.",
   "settings.tab.hostedServers.title": "Hostowane serwery",
   "settings.tab.hostedServers.description": "Twórz serwery OpenBot, które działają, gdy ten komputer jest wyłączony.",
   "settings.sections.label": "Sekcje ustawień",

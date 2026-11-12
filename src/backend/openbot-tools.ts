@@ -74,11 +74,11 @@ interface OpenBotToolDefinition {
 
 /** The page rules for `html_render` and `html_preview`. The names match the variables that `ChatVisual` sends. */
 const VISUAL_PAGE_RULES = [
-  "Write one self-contained HTML document with inline <style> and <script>. Remote http(s) files, such as a chart library from a CDN, load as they are; local file paths do not load.",
-  "The page runs in a sandbox: it cannot use cookies, storage or pop-up windows. A click on an http(s) link opens the link in the user's browser.",
-  "The frame has no border and sits on the chat background, as wide as the reply column (about 360px on phones). Leave html and body with no background, use a fluid width and no outer card or banner title: the page is part of your reply.",
-  "Give charts fixed pixel heights. Let the content set the page height; do not use 100vh or height:100% on html or body. The frame cuts what is outside the page box, so highlight a box with its border, not an outline or an outer shadow.",
-  "OpenBot sets these CSS variables on :root from the app theme, which is dark on the desktop: --background (transparent), --foreground, --muted-foreground, --muted, --card, --card-foreground, --border, --accent, --destructive, --success, --chart-1 to --chart-6, --radius, --font-sans, --font-mono. The base style sets the body font and color from them.",
+  "Write self-contained HTML with inline <style>/<script>. Remote http(s) files, including CDN libraries, load unchanged; local paths do not.",
+  "The sandbox has no cookies, storage or popups. HTTP(S) links open in the user's browser.",
+  "The borderless frame sits on the chat background at reply width (~360px on phones). Keep html/body transparent and fluid; add no outer card or banner title.",
+  "Use fixed pixel chart heights and content-driven page height, never 100vh or height:100% on html/body. Overflow is clipped: highlight with borders, not outlines or outer shadows.",
+  "Theme variables on :root (desktop defaults dark): --background (transparent), --foreground, --muted-foreground, --muted, --card, --card-foreground, --border, --accent, --destructive, --success, --chart-1 to --chart-6, --radius, --font-sans, --font-mono. Base body font/color use them.",
 ].join(" ");
 
 /** What an `html_render` page can ask of the app. The names match `window.openbotPage` in the frame bootstrap. */
@@ -373,7 +373,7 @@ export const OPENBOT_TOOL_DEFINITIONS: readonly OpenBotToolDefinition[] = [
   },
   {
     name: "html_preview",
-    description: `Draw an HTML page out of view and get a screenshot, the content height and the console output. The user does not see it. Use it to check a page before you call html_render, and correct what the screenshot or the console shows. ${VISUAL_PAGE_RULES}`,
+    description: `Preview HTML privately; returns screenshot, content height and console output. Check and correct the page before html_render; the user does not see this preview. ${VISUAL_PAGE_RULES}`,
     shape: htmlPreviewToolSchema.shape,
   },
   {
@@ -633,13 +633,13 @@ export const OPENBOT_TOOL_DEFINITIONS: readonly OpenBotToolDefinition[] = [
   {
     name: RENAME_TASK_TOOL,
     description:
-      "Rename a task that you created with start_task. Give its taskId and a short title (up to 120 characters). Use history_search without a query to find your tasks and their IDs. You cannot rename another agent's tasks, user-created threads, or routine threads. This changes only the title and keeps the conversation, execution and provider session.",
+      "Rename only your start_task-created task: taskId from history_search without a query, title up to 120 characters. Other agents' tasks, user threads and routines are forbidden. Conversation, execution and provider session stay unchanged.",
     shape: renameTaskToolSchema.shape,
   },
   {
     name: TRANSFER_TASK_TOOL,
     description:
-      "Transfer one of your idle tasks to another agent on this server, only when the user asks. Give taskId from history_search without a query and targetAgentId from list_agents. Keeps the same history, attachments and unread markers; does not start work. You cannot move another agent's tasks, routine tasks, or tasks with running or pending work. Call from your own chat, not a channel, external conversation or another task.",
+      "On user request, move your idle task to another local agent: taskId from history_search without a query; targetAgentId from list_agents. Keep history, attachments and unread markers; start no work. No other agents' tasks, routines or active/pending work. Call only from your own chat, never a channel, external chat or task.",
     shape: transferTaskToolSchema.shape,
   },
   ...MEMORY_RECALL_TOOL_DEFINITIONS,

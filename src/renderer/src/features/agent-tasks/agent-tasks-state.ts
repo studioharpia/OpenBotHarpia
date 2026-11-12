@@ -652,7 +652,7 @@ export function createAgentTasks(options: AgentTasksOptions) {
           clientMessageId: crypto.randomUUID(),
           ...((options.messageDelivery?.() ?? local())
             ? {
-                deliveryMode,
+                ...(deliveryMode === undefined ? {} : { deliveryMode }),
                 ...(state.conversations[taskId]?.activeTurnId
                   ? { expectedTurnId: state.conversations[taskId]?.activeTurnId ?? undefined }
                   : {}),

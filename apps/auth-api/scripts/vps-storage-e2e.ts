@@ -78,8 +78,8 @@ async function run(): Promise<void> {
       assert.equal("body" in unchanged, false);
       const matched = await store.put("docs/readme.txt", "conditional update", {
         onlyIf: { etagMatches: current.httpEtag },
-        httpMetadata: current.httpMetadata,
-        customMetadata: current.customMetadata,
+        ...(current.httpMetadata === undefined ? {} : { httpMetadata: current.httpMetadata }),
+        ...(current.customMetadata === undefined ? {} : { customMetadata: current.customMetadata }),
         storageClass: current.storageClass,
       });
       assert.ok(matched);

@@ -268,8 +268,6 @@ export const messages = {
   "settings.tab.agentDock.description": "ドックを表示する場所と、ドックに置くエージェントを選びます。",
   "settings.tab.updates.title": "アップデート",
   "settings.tab.updates.description": "このコンピューターの OpenBot を最新に保ちます。",
-  "settings.tab.billing.title": "お支払い",
-  "settings.tab.billing.description": "ライセンス、サーバーのプラン、支払い方法、請求書。",
   "settings.tab.hostedServers.title": "ホスト型サーバー",
   "settings.tab.hostedServers.description":
     "このコンピューターの電源が切れているときも動作する OpenBot サーバーを作成します。",

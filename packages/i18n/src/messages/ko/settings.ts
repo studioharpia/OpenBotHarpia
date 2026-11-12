@@ -267,8 +267,6 @@ export const messages = {
   "settings.tab.agentDock.description": "독이 표시되는 위치와 독에 둘 에이전트를 선택하세요.",
   "settings.tab.updates.title": "업데이트",
   "settings.tab.updates.description": "이 컴퓨터의 OpenBot을 최신 상태로 유지해요.",
-  "settings.tab.billing.title": "결제",
-  "settings.tab.billing.description": "라이선스, 서버 요금제, 결제 수단, 청구서예요.",
   "settings.tab.hostedServers.title": "호스팅 서버",
   "settings.tab.hostedServers.description": "이 컴퓨터가 꺼져 있어도 실행되는 OpenBot 서버를 만들어요.",
   "settings.sections.label": "설정 섹션",

@@ -17,7 +17,7 @@ assertMutationAllowed({
   command: "sidebar-unread-filter-dev-e2e",
   allowMutations: process.argv.includes("--allow-mutations"),
   instanceNamed: Boolean(named),
-  target: named,
+  ...(named === undefined ? {} : { target: named }),
 });
 const connection = await connectToDevApp(
   instance.remoteDebuggingPort,

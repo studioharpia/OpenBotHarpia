@@ -274,8 +274,6 @@ export const messages = {
   "settings.tab.agentDock.description": "Elige dónde aparece el dock y qué agentes hay en él.",
   "settings.tab.updates.title": "Actualizaciones",
   "settings.tab.updates.description": "Mantén OpenBot actualizado en este equipo.",
-  "settings.tab.billing.title": "Facturación",
-  "settings.tab.billing.description": "Licencia, planes de servidor, método de pago y facturas.",
   "settings.tab.hostedServers.title": "Servidores alojados",
   "settings.tab.hostedServers.description": "Crea servidores de OpenBot que funcionen con este equipo apagado.",
   "settings.sections.label": "Secciones de ajustes",
